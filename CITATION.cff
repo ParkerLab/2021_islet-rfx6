@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+title: >-
+  Code for manuscript "RFX6-mediated dysregulation
+  defines human β cell dysfunction in early
+  type 2 diabetes."
+message: >-
+  Please cite our manuscript from the preferred-citation
+  section if you use code or data from this repository.
+type: software
+preferred-citation:
+  title: RFX6-mediated dysregulation defines human β cell dysfunction in early type 2 diabetes
+  authors:
+    - given-names: Jack T
+      family-names: Walker
+      email: j.walker@vanderbilt.edu
+      affiliation: Vanderbilt University
+    - given-names: Diane C
+      family-names: Saunders
+      email: diane.saunders@vumc.org
+      affiliation: Vanderbilt University
+    - given-names: Vivek
+      family-names: Rai
+      email: vivekrai@umich.edu
+      affiliation: University of Michigan, Ann Arbor
+  type: article
+authors:
+  - given-names: Vivek
+    family-names: Rai
+    email: vivekrai@umich.edu
+    affiliation: University of Michigan, Ann Arbor
