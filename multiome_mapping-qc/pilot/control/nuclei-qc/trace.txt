@@ -1,0 +1,5 @@
+task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
+2	7b/2a73a8	13021725	get_atac_counts (2)	COMPLETED	0	2021-07-28 01:18:23.033	4m 25s	1m 26s	90.5%	6 GB	6.2 GB	5.7 GB	274.8 MB
+4	60/aae23b	13021726	get_rna_counts (1)	COMPLETED	0	2021-07-28 01:18:23.065	5m 30s	1m 3s	85.6%	2.1 GB	2.9 GB	437.3 MB	665.8 MB
+1	dc/3737be	13021727	get_atac_counts (1)	COMPLETED	0	2021-07-28 01:18:23.093	6m 35s	1m 5s	90.7%	5 GB	5.2 GB	4.6 GB	188.4 MB
+3	a9/2b0a4f	13021728	get_rna_counts (2)	COMPLETED	0	2021-07-28 01:18:23.169	7m 24s	49.1s	82.8%	2 GB	2.7 GB	329.6 MB	455.5 MB

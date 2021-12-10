@@ -1,0 +1,572 @@
+---
+title: "Compare Beta, Alpha, and Islet DGE"
+author: "Vivek.Rai"
+date: "2/23/2021"
+output:
+ html_document:
+   code_folding: hide
+   smart: no
+   toc: yes
+editor_options:
+ chunk_output_type: inline
+---
+
+
+```{r setup, include=FALSE}
+options(stringsAsFactors = F, width = 120)
+knitr::opts_chunk$set(
+  comment = "", dev = c('png', 'cairo_pdf'), cache = TRUE, warning = FALSE,
+  message = FALSE, tidy = FALSE, size = "small", error = TRUE, cache.lazy = FALSE,
+  fig.width = 8, fig.height = 6, fig.keep = 'all'
+)
+seed <- 2020
+
+suppressPackageStartupMessages({
+  library(knitr)
+  library(tidyverse)
+  library(patchwork)
+  library(glue)
+})
+
+theme_set(theme_custom())
+
+root.dir <- "/home/vivekrai/analyses/2020-01_vanderbilt_rna/"
+source(glue("{root.dir}/scripts/0_utils.R"))
+```
+
+# Load data
+
+Read the list of MODY + T2D relevant genes.
+
+```{r}
+mody_genes <- read.table(glue("{root.dir}/data/external/mody_genes.csv"), header = T, sep = ",")
+mody_genes$Elite <- FALSE
+mody_genes$Elite[1:13] <- TRUE
+mody_genes$Label <- ifelse(mody_genes$Elite, glue("{mody_genes$Symbol}**"), mody_genes$Symbol)
+```
+Read the list of Cilia-related genes (downloaded from CiliaCarta)
+
+```{r}
+cilia_genes <- read.table(
+  glue("{root.dir}/data/external/2021-02-05_CiliaCarta.csv"),
+  sep = ",",
+  quote = c('"'),
+  header = T
+)
+```
+
+Read the DESeq2 results for each sample type, corresponding to the latent+batch
+variable combination we selected.
+
+```{r}
+beta_dge <- readRDS(glue("{root.dir}/work/dge-analysis/2021-02-03_14-52/Beta.cell.RNA-Disease-10-0.25/ruv-seq_de.rds"))
+beta_dge <- as.data.frame(
+  beta_dge$`~ Disease.Status + Age + Sex + BMI+Batch + W_1+W_2+W_3+W_4+W_5+W_6`$de$res
+) %>%
+  rownames_to_column(var = "gene") %>%
+  mutate(sample = "Beta")
+
+alpha_dge <- readRDS(glue("{root.dir}/work/dge-analysis/2021-02-03_14-52/Alpha.cell.RNA-Disease-10-0.25/ruv-seq_de.rds"))
+alpha_dge <- as.data.frame(
+  alpha_dge$`~ Disease.Status + Age + Sex + BMI+Batch + W_1+W_2+W_3+W_4`$de$res
+) %>%
+  rownames_to_column(var = "gene") %>%
+  mutate(sample = "Alpha")
+
+islet_dge <- readRDS(glue("{root.dir}/work/dge-analysis/2021-02-03_14-52/Whole.Islet.RNA-Disease-10-0.25/ruv-seq_de.rds"))
+islet_dge <- as.data.frame(
+  islet_dge$`~ Disease.Status + Age + Sex + BMI + W_1+W_2+W_3+W_4`$de$res
+) %>%
+  rownames_to_column(var = "gene") %>%
+  mutate(sample = "Islet")
+```
+
+```{r}
+save_print_plot <- function(plot, filename, ...) {
+  save_plot(filename = filename, plot = plot, ...)
+  plot
+}
+```
+
+
+```{r func_defs}
+plot_fc_both <- function(obj1, obj2, label1, label2, fdr=0.01) {
+  tmp_df <- full_join(obj1, obj2, by = "gene")
+  
+  tmp_df$log2FoldChange.x[is.na(tmp_df$log2FoldChange.x)] <- 0
+  tmp_df$log2FoldChange.y[is.na(tmp_df$log2FoldChange.y)] <- 0
+  
+  tmp_df$padj.x[is.na(tmp_df$padj.x)] <- 1
+  tmp_df$padj.y[is.na(tmp_df$padj.y)] <- 1
+  
+  tmp_df$Significance <- interaction(tmp_df$padj.x < fdr, tmp_df$padj.y < fdr)
+  counts <- unlist(table(tmp_df$Significance))
+  
+  tmp_df$Significance <- tmp_df$Significance %>%
+    fct_recode(
+      "Only {label1} ({counts['TRUE.FALSE']})" := "TRUE.FALSE",
+      "Only {label2} ({counts['FALSE.TRUE']})" := "FALSE.TRUE",
+      "Both ({counts['TRUE.TRUE']})" := "TRUE.TRUE",
+      "None ({counts['FALSE.FALSE']})" := "FALSE.FALSE"
+    )
+  
+  ggplot(tmp_df, aes(log2FoldChange.x, log2FoldChange.y)) +
+    geom_point(aes(col = Significance)) +
+    geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed', col = 'red') +
+    ggrepel::geom_label_repel(data = subset(tmp_df, grepl("Both", Significance)),
+              aes(log2FoldChange.x, log2FoldChange.y, label = get_mapping(gene)$SYMBOL)) +
+    scale_color_manual(
+      values = c(gray(.7, .1), viridisLite::viridis(3))
+    ) +
+    labs(
+      x = glue("log2FoldChange ({label1})"),
+      y = glue("log2FoldChange ({label2})"),
+      col = glue("Genes w/ FDR < {fdr}")
+    )
+}
+
+plot_pval_both <- function(obj1, obj2, label1, label2, fdr = 0.01) {
+  tmp_df <- full_join(obj1, obj2, by = "gene")
+  
+  tmp_df$padj.x[is.na(tmp_df$padj.x)] <- 1
+  tmp_df$padj.y[is.na(tmp_df$padj.y)] <- 1
+  
+  tmp_df$Significance <- interaction(tmp_df$padj.x < fdr, tmp_df$padj.y < fdr)
+  counts <- unlist(table(tmp_df$Significance))
+  
+  tmp_df$Significance <- tmp_df$Significance %>%
+    fct_recode(
+      "Only {label1} ({counts['TRUE.FALSE']})" := "TRUE.FALSE",
+      "Only {label2} ({counts['FALSE.TRUE']})" := "FALSE.TRUE",
+      "Both ({counts['TRUE.TRUE']})" := "TRUE.TRUE",
+      "None ({counts['FALSE.FALSE']})" := "FALSE.FALSE"
+    )
+  
+  ggplot(tmp_df, aes(-log10(pvalue.x), -log10(pvalue.y))) +
+    geom_point(aes(col = Significance)) +
+    geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed', col = 'red') +
+    ggrepel::geom_label_repel(data = subset(tmp_df, grepl("Both", Significance)),
+              aes(-log10(pvalue.x), -log10(pvalue.y), label = get_mapping(gene)$SYMBOL)) +
+    scale_color_manual(
+      values = c(gray(.7, .1), viridisLite::viridis(3))
+    ) +
+    labs(
+      x = glue("-log10 P-val ({label1})"),
+      y = glue("-log10 P-val ({label2})"),
+      col = glue("Genes w/ FDR < {fdr}")
+    )
+}
+```
+
+# Explore differences
+
+## Scatter plots comparing results for selected models
+```{r, fig.height=6, fig.width=8}
+save_print_plot(
+  plot_fc_both(beta_dge, islet_dge, "Beta", "Islet"),
+  glue("{root.dir}/figures/draft-figs/de/beta-islet-log2fc"),
+  base_height = 6, base_width = 8
+)
+```
+
+```{r, fig.height=6, fig.width=8}
+save_print_plot(
+  plot_pval_both(beta_dge, islet_dge, "Beta", "Islet"),
+  glue("{root.dir}/figures/draft-figs/de/beta-islet-pval"),
+  base_height = 6, base_width = 8
+)
+```
+
+```{r, fig.height=6, fig.width=8}
+save_print_plot(
+  plot_fc_both(beta_dge, alpha_dge, "Beta", "Alpha"),
+  glue("{root.dir}/figures/draft-figs/de/beta-alpha-log2fc"),
+  base_height = 6, base_width = 8
+)
+```
+
+```{r, fig.height=6, fig.width=8}
+save_print_plot(
+  plot_pval_both(beta_dge, alpha_dge, "Beta", "Alpha"),
+  glue("{root.dir}/figures/draft-figs/de/beta-alpha-pval"),
+  base_height = 6, base_width = 8
+)
+```
+
+```{r, fig.height=6, fig.width=8}
+save_print_plot(
+  plot_fc_both(islet_dge, alpha_dge, "Islet", "Alpha"),
+  glue("{root.dir}/figures/draft-figs/de/islet-alpha-log2fc"),
+  base_height = 6, base_width = 8
+)
+```
+
+```{r, fig.height=6, fig.width=8}
+save_print_plot(
+  plot_pval_both(islet_dge, alpha_dge, "Islet", "Alpha"),
+  glue("{root.dir}/figures/draft-figs/de/islet-alpha-pval"),
+  base_height = 6, base_width = 8
+)
+```
+
+## Comparing `RFX6` across groups
+
+```{r}
+print_gene_vals <- function(obj, gene, label) {
+  obj[obj$gene == gene, ] %>%
+    mutate(type = label)
+}
+
+do.call(rbind, list(
+  print_gene_vals(beta_dge, "ENSG00000185002", "Beta"),
+  print_gene_vals(islet_dge, "ENSG00000185002", "Islet"),
+  print_gene_vals(alpha_dge, "ENSG00000185002", "Alpha")
+))
+```
+
+
+## Plotting logFC z-score heatmap for FDR 1% genes across celltypes
+
+```{r}
+all_dge <- as.data.frame(
+  do.call(rbind, list(beta_dge, alpha_dge, islet_dge))
+) %>%
+  filter(complete.cases(.)) %>%
+  mutate(symbol = get_mapping(gene)$SYMBOL)
+
+all_dge_fdr1 <- all_dge %>% filter(padj < 0.01)
+```
+
+```{r}
+dge_plot_mat <- all_dge %>% as_tibble() %>%
+  dplyr::filter(gene %in% all_dge_fdr1$gene) %>%
+  tidyr::pivot_wider(id_cols = gene, names_from = sample, values_from = stat) %>%
+  dplyr::filter(complete.cases(.)) %>%
+  column_to_rownames(var = "gene")
+
+
+dge_padj_mat <- all_dge %>% as_tibble() %>%
+  dplyr::filter(gene %in% all_dge_fdr1$gene) %>%
+  pivot_wider(id_cols = gene, names_from = sample, values_from = padj) %>%
+  dplyr::filter(complete.cases(.)) %>%
+  column_to_rownames(var = "gene")
+
+genes_to_highlight <- c("INSIG1", "KCNK10", "PLCE1", "G6PC2", "CCKBR", "CHL1", "NPR1", "PDZK1", "TM4SF4", "GPR119", "KCNJ8", "PTGFR", "VPS37B", "LDLR", "HYDIN", "DNAH6", "TPRC6", "CACHD1", "MTUS1", "CNGA3", "PCDH10")
+
+genes_to_highlight <- na.omit(
+  c("ENSG00000137672",
+    get_mapping(genes_to_highlight, keytype = "SYMBOL",
+                column = "ENSEMBL")$ENSEMBL)
+  )
+
+# row_annot = ComplexHeatmap::rowAnnotation(
+#   symbol = ComplexHeatmap::anno_mark(
+#     at = match(genes_to_highlight, rownames(dge_plot_mat)),
+#     labels = rownames(dge_plot_mat)[match(genes_to_highlight, rownames(dge_plot_mat))]
+#   )
+# )
+
+# category2 <-
+#   apply(
+#     t(apply(dge_padj_mat, 1, function(x) as.numeric(x < 0.05))),
+#     1,
+#     function(x) paste0(x, collapse = "")
+#   )
+
+sig_annot <- ComplexHeatmap::rowAnnotation(
+  beta = as.character(rownames(dge_plot_mat) %in% subset(all_dge_fdr1, sample == "Beta")$gene),
+  alpha = as.character(rownames(dge_plot_mat) %in% subset(all_dge_fdr1, sample == "Alpha")$gene),
+  islet = as.character(rownames(dge_plot_mat) %in% subset(all_dge_fdr1, sample == "Islet")$gene),
+  symbol = ComplexHeatmap::anno_mark(
+    at = match(genes_to_highlight, rownames(dge_plot_mat)),
+    labels = get_mapping(rownames(dge_plot_mat)[match(genes_to_highlight, rownames(dge_plot_mat))])$SYMBOL
+  ),
+  col = list(
+    beta = c("TRUE" = "#67ac57", "FALSE" = "transparent"),
+    alpha = c("TRUE" = "#d1362b", "FALSE" = "transparent"),
+    islet = c("TRUE" = "#4a7db3", "FALSE" = "transparent")
+  )
+)
+
+cell_fun = function(j, i, x, y, width, height, fill) {
+    # if(abs(dge_plot_mat[i, j]) > 2) {
+    grid.rect(x = x, y = y, width = width, height = height,  gp = gpar(col = fill, fill = NA))
+    # if(!is.na(dge_padj_mat[i, j]) && dge_padj_mat[i, j] < 0.05) {
+    #   grid.rect(x = x, y = y, width = width, height = height,  gp = gpar(col = fill, fill = NA))
+    # }
+    # else {
+    #   grid.rect(x = x, y = y, width = width, height = height,  gp = gpar(col = "grey", fill = NA))
+    # }
+}
+
+ht <- ComplexHeatmap::Heatmap(dge_plot_mat, name = "logFC z-score", column_names_rot = 90,
+                        show_row_names = F,
+                        row_split = category, cluster_columns = F, border = TRUE,
+                        right_annotation = sig_annot, cell_fun = cell_fun,
+                        cluster_row_slices = FALSE, row_gap = unit(3, "mm"))
+
+tidyHeatmap::save_pdf(ht, filename =  glue("{root.dir}/figures/draft-figs/de/celltypes-log2fc-heatmap-v2.pdf"),
+                      width = 6, height = 8)
+
+write.table(as.data.frame(cbind(dge_plot_mat, category)) %>%
+              rownames_to_column("gene"),
+            file = glue("{root.dir}/figures/draft-figs/de/celltypes-log2fc-grouping-v2.tsv"), quote = F, col.names = T, row.names = F)
+```
+
+```{r}
+category <-
+  apply(
+    t(apply(dge_plot_mat, 1, function(x) as.numeric(x > 0))),
+    1,
+    function(x) paste0(x, collapse = "")
+  )
+
+# Run an enrichKEGG analysis / enrichGO analysis on the genes grouped by significant enrichment
+cluster_labels <- factor(c("111", "110", "101", "100", "011", "010", "001", "000"), ordered = T)
+
+gp_de_func_enrich <- lapply(cluster_labels, function(x) {
+  res <- gprofiler2::gost(names(category[category == x]))$result
+  res$Cluster <- x
+  res
+}) %>% dplyr::bind_rows()
+
+ggplot(gp_de_func_enrich %>% filter(source == "KEGG"),
+       aes(Cluster, term_name)) +
+  geom_line(aes(group = Cluster), col = "gray60") + 
+  geom_point(aes(col = -log10(p_value), size = intersection_size / term_size)) +
+  ggpubr::grids(axis = "xy") +
+  scale_x_discrete(drop = FALSE) +
+  scale_size_continuous(range = c(2, 6)) +
+  labs(size = "GeneRatio", y = "", x = "")
+
+save_plot(file = glue("{root.dir}figures/draft-figs/de/de-clusters-kegg-enrich.pdf"), base_width = 8)
+
+ggplot(gp_de_func_enrich %>% filter(source == "GO:BP"),
+       aes(Cluster, term_name)) +
+  geom_line(aes(group = Cluster), col = 'gray60') + 
+  geom_point(aes(col = -log10(p_value), size = intersection_size / term_size)) +
+  ggpubr::grids(axis = "xy") +
+  scale_x_discrete(drop = FALSE) +
+  scale_size_continuous(range = c(1, 6)) +
+  labs(size = "GeneRatio", y = "", x = "")
+
+save_plot(file = glue("{root.dir}figures/draft-figs/de/de-clusters-go-enrich.pdf"), base_height = 10, base_width = 9)
+
+#,
+#  fun = "enrichGO",
+#  keyType = "ENSEMBL",
+#  ont = "BP",
+#  OrgDb = org.Hs.eg.db
+#)
+
+# custom.dotplot(cp_de_gobp)
+
+# cp_de_gomf <- clusterProfiler::compareCluster(
+#   lapply(split(as.data.frame(category), category), function(x) rownames(x)),
+#   fun = "enrichGO",
+#   keyType = "SYMBOL",
+#   ont = "MF",
+#   OrgDb = org.Hs.eg.db
+# )
+# 
+# custom.dotplot(cp_de_gomf)
+
+# cp_de_kegg <- clusterProfiler::compareCluster(
+#   lapply(split(as.data.frame(category), category), function(x) {
+#     get_mapping(rownames(x), keytype = "ENSEMBL", column = "ENTREZID")$ENTREZID
+#   }),
+#   fun = "enrichKEGG"
+# )
+# 
+# custom.dotplot(cp_de_kegg)
+```
+
+
+## MODY
+
+```{r}
+ggplot(all_dge %>% group_by(sample) %>% 
+         filter(symbol %in% c(subset(mody_genes, Elite)$Symbol, "HNF1B")),
+       aes(sample, symbol)) +
+  geom_tile(aes(fill = log2FoldChange / lfcSE)) +
+  geom_point(aes(shape = santoku::chop(padj, breaks = c(0.01, 0.05, 1)))) +
+  scale_fill_gradient2() +
+  scale_shape_manual(values = c(8, 1, 96)) +
+  labs(shape = "FDR", y = "Genes", x = "", fill = "log2FC / lfcSE")
+```
+
+
+```{r, fig.height=6, fig.width=12}
+ggplot(all_dge %>% filter(symbol %in% mody_genes$Symbol) %>%
+         filter(symbol %in% subset(mody_genes, !Elite)$Symbol) %>%
+         filter(abs(log2FoldChange) > 1),
+       aes(sample, symbol)) +
+  geom_tile(aes(fill = log2FoldChange / lfcSE)) +
+  geom_point(aes(shape = santoku::chop(padj, breaks = c(0.01, 0.05, 1)))) +
+  scale_fill_gradient2() +
+  scale_shape_manual(values = c(8, 1, 96)) +
+  labs(shape = "FDR", y = "Genes", x = "") + coord_flip() +
+  ggpubr::rotate_y_text() + ggpubr::rotate_x_text()
+```
+
+
+## Cilia
+
+```{r, fig.width=14}
+ggplot(all_dge %>% filter(gene %in% cilia_genes$Ensembl.Gene.ID) %>% filter(padj < 0.01),
+       aes(sample, symbol)) +
+  geom_tile(aes(fill = log2FoldChange)) +
+  geom_point(aes(shape = santoku::chop(padj, breaks = c(0.01, 0.05, 1)))) +
+  scale_fill_gradient2() +
+  scale_shape_manual(values = c(8, 1, 96)) +
+  labs(shape = "FDR", y = "Genes", x = "") + coord_flip() +
+  ggpubr::rotate_y_text() + ggpubr::rotate_x_text()
+```
+
+
+## RFX
+
+```{r}
+ggplot(
+  all_dge %>% group_by(sample) %>% 
+         mutate(pBY = p.adjust(pvalue, method = "BY")) %>%
+  filter(grepl("RFX[1-9]", symbol)), #%>%
+    # group_by(sample) %>% mutate(log2FoldChange = scale(log2FoldChange)),
+  aes(sample, symbol)) +
+  geom_tile(aes(fill = log2FoldChange)) +
+  geom_text(aes(label = round(log2FoldChange, 3)), nudge_y = .25) +
+  geom_point(aes(shape = santoku::chop(padj, breaks = c(0.01, 0.05, 1)))) +
+  scale_fill_gradient2() +
+  scale_shape_manual(values = c(8, 21, 96)) +
+  labs(shape = "P-value (FDR)", x = "", y = "Genes")
+```
+
+```{r, fig.width=6, fig.height=8}
+alpha_beta_sig <- all_dge %>% filter(padj < 0.01, sample != "Islet") %>% 
+  group_by(gene) %>% mutate(count = n()) %>% filter(count > 1)
+
+ggplot(alpha_beta_sig, aes(sample, symbol)) +
+  geom_tile(aes(fill = log2FoldChange)) +
+  geom_point(aes(shape = santoku::chop(padj, breaks = c(0.01, 0.05)))) +
+  scale_fill_gradient2() +
+  scale_shape_manual(values = c(8, 1)) +
+  labs(shape = "FDR", x = "", y = "Genes")
+```
+
+## Functional term enrichment
+### KEGG
+
+```{r}
+# KEGG
+kegg_enrich_res <- all_dge %>%
+  group_by(sample) %>%
+  group_map(function(.x, .y) {
+    cbind(rna_enrich(sigvals = .x$pvalue, geneids = get_mapping(.x$gene, column = "ENTREZID")$ENTREZID,
+               avg_readcount = .x$baseMean, database = "KEGG", species = "hsa"), .y)
+  }) %>%
+  bind_rows()
+```
+
+
+```{r}
+saveRDS(file = glue("{root.dir}/work/dge-analysis/2021-02-05_normalized-data-share/kegg_rnaenrich.rds"), kegg_enrich_res)
+```
+
+
+```{r}
+kegg_enrich_fdr05 <- kegg_enrich_res %>% filter(FDR < 0.1)
+
+kegg_plot_mat <- kegg_enrich_res %>%
+  filter(Concept.ID %in% kegg_enrich_fdr05$Concept.ID) %>%
+  pivot_wider(id_cols = Concept.name, names_from = sample, values_from = odds.ratio) %>%
+  column_to_rownames(var = "Concept.name")
+
+kegg_padj_mat <- kegg_enrich_res %>%
+  filter(Concept.ID %in% kegg_enrich_fdr05$Concept.ID) %>%
+  pivot_wider(id_cols = Concept.name, names_from = sample, values_from = FDR) %>%
+  column_to_rownames(var = "Concept.name")
+
+cell_fun = function(j, i, x, y, width, height, fill) {
+    if(!is.na(kegg_padj_mat[i, j]) && kegg_padj_mat[i, j] > 0.05) {
+      grid.rect(x = x, y = y, width = width, height = height, 
+                gp = gpar(col = "white", fill = "white"))
+    }
+    # if(!is.na(kegg_padj_mat[i, j]) && kegg_padj_mat[i, j] < 0.01) {
+    #   grid.text("**", x, y)
+    # } else if (kegg_padj_mat[i, j] < 0.05) {
+    #   grid.text("*", x, y)
+    # }
+}
+
+ht <- ComplexHeatmap::Heatmap(kegg_plot_mat - 1, name = "Odds ratio", column_names_rot = 90,
+                        show_row_names = T, cluster_columns = F, border = TRUE, cell_fun = cell_fun,
+                        row_names_side = "left", row_dend_side = "right",
+                         row_names_max_width = unit(5, "in"),
+                         heatmap_legend_param=list(at = c(1, 0.5, 0, -0.5, -1), labels=c("1 (enriched)", "0.5", "0", "-0.5", "-1 (depleted)")),
+                        cluster_row_slices = FALSE, row_gap = unit(3, "mm"), row_title = "KEGG Terms", row_title_side = "right")
+
+tidyHeatmap::save_pdf(ht, filename = glue("{root.dir}figures/draft-figs/de/kegg_enrich_fdr01.pdf"), width = 7, height = 7)
+
+# write_tsv(as.data.frame(kegg_plot_mat - 1) %>% rownames_to_column("Term"), glue("{root.dir}figures/draft-figs/de/kegg_enrich_fdr01.tsv"), col_names = T)
+
+write_tsv(kegg_enrich_fdr05, glue("{root.dir}figures/draft-figs/de/kegg_enrich_fdr01.tsv"), col_names = T)
+```
+
+### GOBP
+```{r}
+go_enrich_res <- all_dge %>%
+  group_by(sample) %>%
+  group_map(function(.x, .y) {
+    cbind(rna_enrich(sigvals = .x$pvalue, geneids = get_mapping(.x$gene, column = "ENTREZID")$ENTREZID,
+               avg_readcount = .x$baseMean, database = "GOBP", species = "hsa"), .y)
+  }) %>%
+  bind_rows()
+
+go_id_map <- clusterProfiler::bitr(go_enrich_res$Concept.ID, fromType = "GOID", toType = "TERM", OrgDb = "GO.db")
+
+go_enrich_res$Concept.name <- go_id_map$TERM[match(go_enrich_res$Concept.ID, go_id_map$GOID)]
+```
+
+```{r, fig.height=14}
+go_enrich_fdr05 <- go_enrich_res %>% filter(FDR < 0.05)
+# go_enrich_fdr05 <- go_enrich_res %>% dplyr::group_by(sample, status) %>% slice_min(FDR, n = 20)
+
+# go_collapse <- getRevigo(go_enrich_fdr05[, c("Concept.ID", "p.value")], cutoff = 0.5)$GOBP
+# go_collapse <- subset(go_collapse, Eliminated == " False")
+
+go_plot_mat <- go_enrich_res %>%
+  filter(Concept.ID %in% go_enrich_fdr05$Concept.ID) %>%
+  # filter(Concept.ID %in% go_collapse$TermID) %>%
+  pivot_wider(id_cols = Concept.name, names_from = sample, values_from = odds.ratio) %>%
+  column_to_rownames(var = "Concept.name")
+
+go_padj_mat <- go_enrich_res %>%
+  filter(Concept.ID %in% go_enrich_fdr05$Concept.ID) %>%
+  # filter(Concept.ID %in% go_collapse$TermID) %>%
+  pivot_wider(id_cols = Concept.name, names_from = sample, values_from = FDR) %>%
+  column_to_rownames(var = "Concept.name")
+
+cell_fun = function(j, i, x, y, width, height, fill) {
+    if(!is.na(go_padj_mat[i, j]) && go_padj_mat[i, j] > 0.05) {
+      grid.rect(x = x, y = y, width = width, height = height, 
+                gp = gpar(col = "white", fill = "white"))
+    }
+    # if(!is.na(go_padj_mat[i, j]) && go_padj_mat[i, j] < 0.01) {
+    #   grid.text("**", x, y)
+    # } else if (go_padj_mat[i, j] < 0.05) {
+    #   grid.text("*", x, y)
+    # }
+}
+
+ComplexHeatmap::Heatmap(go_plot_mat - 1, name = "Odds ratio", column_names_rot = 90,
+                        show_row_names = T, cluster_columns = F, border = TRUE,
+                        cell_fun = cell_fun, cluster_row_slices = FALSE,
+                        row_gap = unit(3, "mm"), row_title = "GOBP",
+                        row_names_max_width = unit(5, "in"),
+                        row_names_side = "left",
+                        heatmap_legend_param=list(at = c(1, 0.5, 0, -0.5, -1), labels=c("1 (enriched)", "0.5", "0", "-0.5", "-1 (depleted)")),
+                        row_dend_side = "right", row_title_rot = 90, row_title_side = "right")
+
+write_tsv(as.data.frame(go_plot_mat - 1) %>% rownames_to_column("Term"), glue("{root.dir}figures/draft-figs/de/gobp_enrich_fdr05.tsv"), col_names = T)
+```
+

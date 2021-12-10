@@ -1,0 +1,42 @@
+libraries:
+    3528_ATAC_CV1:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3528_ATAC_CV1_a:
+                '1': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_a.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_a.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_a.R2.fastq.gz
+            3528_ATAC_CV1_b:
+                '1': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_b.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_b.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_b.R2.fastq.gz
+            3528_ATAC_CV1_c:
+                '1': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_c.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_c.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_c.R2.fastq.gz
+            3528_ATAC_CV1_d:
+                '1': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_d.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_d.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV1_d.R2.fastq.gz
+    3528_ATAC_CV2:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3528_ATAC_CV2_a:
+                '1': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_a.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_a.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_a.R2.fastq.gz
+            3528_ATAC_CV2_b:
+                '1': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_b.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_b.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_b.R2.fastq.gz
+            3528_ATAC_CV2_c:
+                '1': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_c.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_c.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_c.R2.fastq.gz
+            3528_ATAC_CV2_d:
+                '1': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_d.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_d.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/atac/3528_ATAC_CV2_d.R2.fastq.gz
+

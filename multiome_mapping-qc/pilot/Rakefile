@@ -1,0 +1,204 @@
+# Copyright (c) 2021 Vivek Rai
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+root = ENV['ROOT']
+
+ATAC_FASTQ_DIR = "/path/to/atac/pilot/fastq/"
+RNA_FASTQ_DIR = "/path/to/atac/pilot/fastq/"
+snATAC_sif = "/lab/work/porchard/singularity/archive/snATAC/2021-03-26/snATAC.simg"
+snRNA_sif = "/lab/work/porchard/singularity/archive/snRNA/2020-11-13/snRNA.simg"
+
+if root.nil?
+  puts 'ROOT environment variable is not set'
+  exit 1
+end
+
+work = "#{root}/work"
+data = "#{root}/data"
+bin = "#{root}/bin"
+
+def results(root, tag)
+  "#{root}/work/#{tag}"
+end
+
+def control(root, tag)
+  "#{root}/control/#{tag}"
+end
+
+namespace :data do
+  desc "Link FASTQ files"
+  task :link_fastq do
+    atac_dir = "#{data}/fastq/atac"
+    rna_dir = "#{data}/fastq/rna"
+    mkdir_p(atac_dir)
+    mkdir_p(rna_dir)
+
+    sh "python #{bin}/fetch-fastq.py #{atac_dir}"
+
+    [1, 2].each do |r|
+      ln_sf(
+        "/lab/data/seqcore/3528-CV/GEX/fastqs_3528-CV/Sample_3528-CV-1-3GEX/3528-CV-1-3GEX_TTGCCCGT-AATCTCAC_S145_R#{r}_001.fastq.gz",
+        "#{rna_dir}/3528_CV1_R#{r}.fastq.gz"
+      )
+      ln_sf(
+        "/lab/data/seqcore/3528-CV/GEX/fastqs_3528-CV/Sample_3528-CV-2-3GEX/ 3528-CV-2-3GEX_GCGGGTAA-CTTAGTGC_S146_R#{r}_001.fastq.gz",
+        "#{rna_dir}/3528_CV2_R#{r}.fastq.gz"
+      )
+    end
+  end
+
+  desc "Build indexes"
+  multitask :build_indexes => [:star_index, :bwa_index]
+
+  task :star_index do
+    mkdir_p("#{data}/reference/star")
+
+    puts "singularity exec #{snRNA_sif} \
+      STAR --runMode genomeGenerate --runThreadN 16 --genomeDir #{data}/reference/star \
+        --genomeFastaFiles #{data}/reference/hg19-mCherry-mKate2.fa \
+        --sjdbGTFfile #{data}/reference/hg19-mCherry-mKate2.gtf
+    "
+  end
+
+  task :bwa_index do
+    mkdir_p("#{data}/reference/bwa")
+    ln_sf("#{data}/reference/hg19-mCherry-mKate2.fa", "#{data}/reference/bwa/hg19-mCherry-mKate2.fa")
+    puts "singularity exec #{snATAC_sif} bwa index #{data}/reference/bwa/hg19-mCherry-mKate2.fa"
+  end
+end
+
+namespace :atac do
+  dir = control(root, 'atacseq')
+  work_dir = results(root, 'atacseq')
+
+  task :setup do
+    mkdir_p(dir)
+
+    sh "python #{dir}/make_config.py #{root} > #{dir}/config.yaml"
+
+    puts "cp -r /home/porchard/github/snATACseq-NextFlow #{root}/src/"
+    puts "cp -r src/snATACseq-NextFlow/bin #{dir}/bin"
+    puts "cp -r src/snATACseq-NextFlow/main.nf #{dir}/main.nf"
+    puts "cp -r src/snATACseq-NextFlow/nextflow.config #{dir}/nextflow.config"
+  end
+
+  desc "Align/map ATAC data"
+  task :map do
+    mkdir_p(work_dir)
+
+    sh "cd #{dir} && nextflow run -resume -with-trace -params-file config.yaml \
+      -with-singularity /lab/work/porchard/singularity/archive/snATAC/2021-03-26/snATAC.simg \
+      --low_read_count_threshold 1000 -with-report -qs 300 --results #{work_dir} \
+      main.nf &"
+  end
+end
+
+namespace :genotype do
+  task :fix_vcf do
+    puts <<~CMD
+      echo $PWD
+      cd data/imputation;
+      vcf-concat filtered/*.vcf.gz | awk '{
+        if($0 !~ /^#/)
+            print "chr"$0;
+        else if(match($0,/(##contig=<ID=)(.*)/,m))
+            print m[1]"chr"m[2];
+        else print $0
+      }' > all-chr.recode.vcf
+
+      echo $PWD
+      picard -m 16G UpdateVcfSequenceDictionary INPUT=all-chr.recode.vcf OUTPUT=all-chr.recode.fixed.vcf SEQUENCE_DICTIONARY=/lab/work/vivekrai/2021-06_pilot-rfx6/data/reference/hg19-mCherry-mKate2.dict
+      picard -m 16G SortVcf INPUT=all-chr.recode.fixed.vcf OUTPUT=all-chr.recode.sorted.vcf
+    CMD
+  end
+end
+
+namespace :rna do
+  dir = control(root, 'rnaseq')
+  work_dir = results(root, 'rnaseq')
+
+  task :setup do
+    mkdir_p(dir)
+
+    sh "python #{dir}/make_config.py #{root} > #{dir}/config.yaml"
+
+    puts "cp -r /home/porchard/github/snRNAseq-NextFlow #{root}/src/"
+    puts "cp -r src/snRNAseq-NextFlow/bin #{dir}/bin"
+    puts "cp -r src/snRNAseq-NextFlow/main.nf #{dir}/main.nf"
+    puts "cp -r src/snRNAseq-NextFlow/nextflow.config #{dir}/nextflow.config"
+
+  end
+
+  desc "Align/map RNA data"
+  task :map do
+    mkdir_p(work_dir)
+
+    sh "cd #{dir} && nextflow run -resume -with-trace -params-file config.yaml -with-singularity \
+      /lab/work/porchard/singularity/archive/snRNA/2021-06-21/snRNA.simg -with-report -qs 300 \
+      --results #{work_dir} main.nf &"
+  end
+end
+
+namespace :demuxlet do
+  desc "Run demuxlet using ATAC modality"
+  task :atac do
+    tag = "demuxlet_atac"
+    dir = control(root, tag)
+    work_dir = results(root, tag)
+
+    mkdir_p(work_dir)
+
+    sh "cd #{dir} && nextflow run -resume -params-file config.yaml --results #{work_dir} main.nf &"
+  end
+
+  desc "Run demuxlet using RNA modality"
+  task :rna do
+    tag = "demuxlet_rna"
+    dir = control(root, tag)
+    work_dir = results(root, tag)
+
+    mkdir_p(work_dir)
+
+    sh "cd #{dir} && nextflow run -resume -params-file config.yaml --results #{work_dir} main.nf &"
+  end
+end
+
+
+namespace :qc do
+  desc "Get good quality nuclei barcodes post demuxlet"
+  task :get_pass_qc_nuclei do
+    print "Will write Pass QC nuclei to #{root}/work/nuclei-qc"
+    print "Check the ipynb notebook for figures"
+    sh "jupyter nbconvert --to notebook --execute #{root}/notebooks/qc.ipynb --inplace"
+  end
+
+  desc "Export ATAC/RNA counts to HDF5"
+  task :export_to_hdf do
+    tag = "nuclei-qc"
+    work_dir = results(root, tag)
+
+    sh "cd #{control(tag)} && nextflow run -resume --results #{work_dir} counts.nf &"
+  end
+end
+
+namespace :clustering do
+  tag = "clustering"
+  cluster_dir = results(root, tag)
+  mkdir_p(cluster_dir)
+
+  desc "(RNA Modality) Grid search for combined libraries.."
+  task :rna_grid_search do
+    puts "#drmr:job node_properties=wolverine processors=1 processor_memory=10g"
+    work_dir = "#{cluster_dir}/grid-search"
+    [15, 20, 22, 24, 26, 28, 30, 40].each do |pc|
+      (0.2..0.8).step(0.1) do |res|
+        puts """Rscript #{root}/notebooks/2021-08-04_cluster.r \
+          -c #{pc} -r #{res.round(2)} -o #{work_dir}/rna-#{pc}-#{res}
+        """
+      end
+    end
+  end
+end
+

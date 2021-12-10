@@ -1,0 +1,417 @@
+---
+title: "Differential Expression Analysis"
+date: "5/4/2020"
+output:
+ html_document:
+   code_folding: hide
+   theme: paper
+   toc: yes
+   toc_float: yes
+   df_print: paged
+   mathjax: null
+   keep_md: true
+params:
+  celltype: "Beta.cell.RNA"
+  contrast: "Disease"
+  fdr: 0.05
+  ruvseq_pval_thresh: 0.5
+  min_reads_per_sample: 10
+  min_fraction_of_sample: .25
+  outdir: NULL
+editor_options:
+ chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+options(stringsAsFactors = F)
+set.seed(2020)
+
+suppressPackageStartupMessages({
+  library(knitr)
+  library(tidyverse)
+  library(scales)
+  library(BiocSingular)
+  library(RColorBrewer)
+  library(glue)
+  library(tidyHeatmap)
+})
+
+theme_set(theme_custom())
+```
+
+# Celltype: `r params$celltype`, Contrast: `r params$contrast`
+
+```{r set-options, include=FALSE, cache=FALSE}
+options(width=120)
+
+opts_knit$set(root.dir = "/home/vivekrai/analyses/2020-01_vanderbilt_rna")
+opts_chunk$set(comment = "", cache = TRUE,
+               warning = FALSE, message = FALSE, size = "small",
+               error = TRUE, fig.keep = "all",
+               cache.path = glue("{params$outdir}/.cache"))
+```
+
+```{r, cache=FALSE}
+source("~/bin/rna_enrich") 
+source("./scripts/0_utils.R")
+
+sanity_check <- function(params) {
+  stopifnot(params$celltype %in% c("Alpha.cell.RNA", "Beta.cell.RNA", "Whole.Islet.RNA"))
+  stopifnot(params$contrast %in% c("Disease", "Age"))
+}
+sanity_check(params)
+```
+
+```{r}
+print(params)
+```
+
+```{r global_vars}
+FDR <- params$fdr  # Set global FDR
+min_reads_per_sample <- params$min_reads_per_sample
+min_fraction_of_sample <- params$min_fraction_of_sample
+num_latent_factors <- 12
+
+if (params$celltype %in% c("Alpha.cell.RNA")) {
+  num_latent_factors <- 8
+}
+
+genes_of_interest <- c(
+  "MAFA", "MAFB", "RFX6", "ARX", "ISL1", "NEUROD1", "FOXA2",
+  "PAX6", "FOXO1", "NKX2-2", "PDX1", "NKX6-1", "FOXO1",
+  "IL6R", "IL6ST", "IL1R1", "IFNGR1", "IFNGR2", "CSF-1",
+  "TNFRS19", "NFKB-1", "NFKB-2", "REL", "RELA", "STAT1", "JAK1",
+  "TNFAIP1", "TNFAIP3", "TCF1", "IPF1", "ITPR1", "SLC6A4"
+) #check Muraro et al
+
+root <- "/home/vivekrai/analyses/2020-01_vanderbilt_rna"
+```
+
+# Load data
+## Sample covariate information
+```{r metadata, include=FALSE}
+# rename Sequencing.Batch to Batch -- feedback by @steve
+metadata <- readRDS(glue("{root}/work/2020-03-25_post-qc/sample_info.rds")) %>% 
+  dplyr::rename(Batch = Sequencing.Batch) %>%
+  dplyr::select(-starts_with("PC"), -starts_with("Time.on"), -Blood.Type, -SAM.ID, -Cause.of.Death, -Age.Units, -contains("profile"), -sry_exp, -xist_exp) %>%
+  mutate_if(is.character, ~as.factor(.x)) %>%
+  filter(Sample.ID != "MG-0153_a-ND-52") # remove bad Alpha-cell sample
+head(metadata)
+```
+
+```{r counts, include=FALSE}
+counts_mat <- readRDS(glue("{root}/work/2020-03-25_post-qc/counts_protein-coding.rds"))
+```
+
+```{r, include=FALSE}
+if (params$contrast == "Disease") {
+  writeLines("Removing juvenile samples..")
+  celltype_meta <- filter_eval(metadata, glue("Type == '{params$celltype}' & !grepl('Juvenile', Disease.Status)"))
+  contrast_vec = c("Disease.Status", "Type 2 Diabetes", "Adult Normal") # fold change = numerator / denominator
+} else {
+  writeLines("Removing T2D samples..")
+  celltype_meta <- filter_eval(metadata, glue("Type == '{params$celltype}' & !grepl('Diabetes', Disease.Status)"))
+  contrast_vec <- c("Disease.Status", "Adult Normal", "Juvenile Normal")
+}
+
+## Remove the bad Alpha.cell sample
+if (params$celltype %in% c("Alpha.cell.RNA")) {
+  celltype_meta <- celltype_meta %>% filter(Sample.ID != "MG-0153_a-ND-52")
+}
+```
+
+The three cell-types contain Alpha, Beta, and Whole Islet samples. They also have
+Juvenile (< 18 yrs) and Adult (>18 yrs) donors. In order to perform exploratory QC and
+differential expression, we split the anlaysis into two groups of interest per
+cell-type: Adult vs Juvenile (normals), and Adult T2D vs Adult Normal.
+
+# Process data
+
+We must then normalize the counts across libraries. For this, we will use the the `vst`
+from DESeq2 packages which does robust cross-sample normalization. The values are on log
+scale.[^1] Note that this is only for exploratory and downstream analysis purposes
+because DESeq2 uses raw-count data in its generalized linear mixed model. 
+
+[^1]: https://bioinformatics.stackexchange.com/questions/2329/which-measure-should-be-used-in-a-pca-or-rna-seq-data-tpm-or-counts?noredirect=1&lq=1
+
+```{r subset, dependson='global_vars'}
+# subset to samples
+celltype_raw_counts <- counts_mat[, colnames(counts_mat) %in% celltype_meta$Sample.ID]
+
+# reorder the metadata matrix in same order as samples in counts mat -- just to be sure
+celltype_meta <- celltype_meta[match(colnames(celltype_raw_counts), celltype_meta$Sample.ID), ]
+
+# subset and remove lowly expressed genes
+celltype_raw_counts <- subset(
+  celltype_raw_counts,
+  apply(celltype_raw_counts, 1, function(x) sum(x >= min_reads_per_sample) >= (length(x) * min_fraction_of_sample))
+)
+```
+
+## Normalize
+```{r norm}
+# normalize using varianceStabilizingTransform from DESeq2, blind = TRUE
+celltype_vst_counts <- normalize_deseq(celltype_raw_counts)
+
+# normalize for library sizes
+size.factors <- DESeq2::estimateSizeFactorsForMatrix(celltype_raw_counts)
+celltype_norm_counts <- t(apply(celltype_raw_counts, 1, function(x) x/size.factors))
+celltype_norm_counts.log <- log2(celltype_norm_counts + 1) # add a pseudocount
+```
+
+**Before normalization**
+```{r, fig.height=4}
+boxplot(log2(celltype_raw_counts + 1))
+```
+
+**After normalization**
+```{r, fig.height=4}
+boxplot(celltype_norm_counts.log)
+```
+
+**How are samples related to each other?**
+```{r, fig.height=6, fig.width=7}
+ComplexHeatmap::Heatmap(cor(celltype_norm_counts.log), border = T)
+```
+
+## Overview
+### Top 50 expressed genes
+```{r plot_top_50, fig.height=6}
+writeLines(glue("Using {paste(dim(celltype_vst_counts), collapse = 'x')} vst-transformed matrix."))
+plot_count_heatmap(celltype_vst_counts, name = params$celltype)
+```
+
+# QC
+## PCA
+
+```{r pca}
+celltype_pca <- get_pca(celltype_vst_counts)
+```
+
+### Is variable of interest confounded with anything else? / Covariates correlation
+
+```{r}
+celltype_meta <- combine_pca_with_metadata(
+  celltype_pca,
+  celltype_meta %>% dplyr::select(-Islet.Isolation.Center)
+)
+```
+
+```{r, fig.width=8, fig.height=7}
+corr.mat <- get_correlation(celltype_meta)
+corrplot::corrplot(corr.mat$r, p.mat = corr.mat$p, insig = "label_sig", tl.cex = .5, diag = FALSE)
+```
+
+## Examine PCA with covariates
+
+We plot the PCA of all libraries after normalization along with a covariates of
+interest such as "Sex" or "Batch".
+
+```{r, include=FALSE}
+plot_pc_cor_covariate <- function(pca, metadata, cols.of.interest = c("READ_PAIR_OK", "chrM_mean_exp", "Age", "BMI", "TIN_mean")) {
+  do.call(cbind, lapply(cols.of.interest, function(col) {
+    data.frame(col = cor(pca$x, metadata[match(rownames(pca$x), metadata$Sample.ID), ][col])^2)
+  })) %>%
+  rownames_to_column("PC") %>%
+  pivot_longer(cols = -PC, names_to = "Metric", values_to = "Corr") %>%
+  mutate(PC = as.numeric(gsub("PC", "", PC))) %>%
+  ggplot(., aes(PC, Corr, col = Metric, group = Metric)) + geom_point() + geom_line() +
+  geom_hline(data = NULL, aes(yintercept = 0), linetype = 'dashed')
+}
+```
+
+```{r, fig.width=10, fig.height=10}
+plot_pca_grid(celltype_pca, metadata = celltype_meta, alpha = .4, k = 4,
+  additional.cols = c("TIN_mean", "Age", "Sex", "Batch")
+)
+```
+
+```{r, fig.width=10, fig.height=10}
+make_grid_plot(celltype_pca, celltype_meta)
+```
+
+# Differential Expression analysis
+
+We will use DESeq2 to run differential expression analysis. Based on exploration above,
+we can include different covariates to see how the differential gene detection power
+changes.
+
+The base model includes "Age", "Sex", and "BMI" as co-variates based on the clear
+correlation in the heatmap above. We see how the results change with inclusion of other
+covariates.
+
+```{r create_dds}
+dds <- create_dds_obj(
+  celltype_raw_counts,
+  celltype_meta
+)
+
+base_design <- "~ Disease.Status + Age + Sex + BMI"
+
+if (length(unique(celltype_meta$Batch)) > 1) {
+  base_design <- paste(base_design, "Batch", sep = "+")
+}
+
+```
+
+```{r, echo=FALSE}
+pretty_print_de_results <- function(objs, fdr, has_ruv = TRUE, summary = TRUE) {
+  if (has_ruv)
+    de_objects <- lapply(objs, function(x) x$de)
+  else
+    de_objects <- objs
+  
+  if (summary) {
+    print(many_de_summary(de_objects, fdr = fdr))
+    print(many_de_summary(de_objects, fdr = fdr, log2fc.abs = 1))
+  }
+  
+  wrap_plot_multi(de_objects, function(x, fdr) {
+    print(plot_volcano(x, fdr = fdr))
+    print(plot_deseq_heatmap(x, celltype_meta, fdr = fdr, split_by = "Disease.Status"))
+  }, fdr)
+}
+```
+
+## Direct model with covariates; without any batch correction
+
+```{r run_deseq, echo=FALSE}
+additional_covs <- c("Race", "TIN_mean", "PC1")
+
+if (length(unique(celltype_meta$Batch)) > 1) {
+  additional_covs <- c("Batch", additional_covs)
+}
+
+celltype_de_explore <- run_many_designs_deseq(
+  dds,
+  "~ Disease.Status + Age + Sex + BMI",
+  additional_covs,
+  contrast = contrast_vec,
+  shrink = FALSE
+)
+```
+
+### Summary
+```{r}
+many_de_summary(celltype_de_explore)
+```
+
+### Volcano and heatmap plots
+```{r, fig.height=10, fig.width=10, eval=FALSE}
+pretty_print_de_results(celltype_de_explore, fdr = FDR, has_ruv = FALSE)
+```
+
+### Compare models
+```{r, fig.height=8, eval=FALSE}
+plot_compare_foldchange_models(celltype_de_explore)
+```
+
+**Genes of interest**
+```{r, fig.height=8, fig.width=6}
+plot_genes_across_models(celltype_de_explore, genes_of_interest)
+```
+
+### Export data
+```{r save_de}
+saveRDS(celltype_de_explore, file = glue("{params$outdir}/direct-covariates_de.rds"))
+```
+
+## Using RUV-seq; protected for Age, Sex, BMI, Batch
+
+First, we estimate the covariate of unwanted variation using non significant genes in the
+base model and then use the estimated latent variables (controlled by k) to re-run the
+differential analysis.
+
+```{r ruv}
+celltype_ruvseq <- run_ruvseq(
+    dds,
+    design = base_design,
+    contrast = contrast_vec,
+    k = num_latent_factors,
+    p.val.thresh = params$ruvseq_pval_thresh,
+    method = "ruvg"
+)
+```
+
+```{r save_ruv}
+saveRDS(celltype_ruvseq, file = glue("{params$outdir}/ruv-seq_de.rds"))
+```
+
+### Overview
+**How many latent variables to include?**
+
+```{r}
+ggplot(many_de_summary(lapply(celltype_ruvseq, function(x) x$de), fdr = FDR),
+       aes(1:length(celltype_ruvseq), total_signif)) +
+  geom_point() + ggrepel::geom_text_repel(aes(label = glue("{up}↑ {down}↓"))) + geom_line() +
+  labs(x = 'No. of latent variables', y = 'Total DE genes',
+       title = glue("{params$celltype}_reads-{params$min_reads_per_sample}_in-{params$min_fraction_of_sample}-samples_fdr-{FDR}"))
+```
+
+### Volcano and heatmap plots
+
+**Results**
+```{r}
+pretty_print_de_results(celltype_ruvseq, fdr = FDR)
+```
+
+**RUV-seq diagnostic plots -- RLE and PCA after UQ**
+
+```{r}
+lapply(celltype_ruvseq, function(x) {
+  plot_ruv_diagnostics(x$normCounts, celltype_meta, group = contrast_vec[1], main = x$de$design)
+})
+```
+
+### Explore latent variables
+
+**How are the latent variables related to everything else?**
+
+```{r, fig.height=10, fig.width=10}
+invisible(lapply(celltype_ruvseq, function(x) {
+  corr.mat <- get_correlation(
+    combine_by_sampleid(
+      celltype_meta,
+      data.frame(x$W) %>% tibble::rownames_to_column("Sample.ID")
+    )
+  )
+  corrplot::corrplot(corr.mat$r, p.mat = corr.mat$p, tl.cex = .75,
+                     insig = "label_sig", diag = FALSE)
+}))
+```
+
+**RUV-seq weights**
+
+```{r, fig.height=8, fig.width=8}
+plot_ruv_loadings(tail(celltype_ruvseq, 1)[[1]])
+```
+
+### Summary
+
+**Genes of interest**
+
+```{r, fig.height=8, fig.width=6}
+plot_genes_across_models(lapply(celltype_ruvseq, function(x) x$de), genes_of_interest)
+```
+
+**SKIP: How do the log2FoldChange values compare for genes across models?**
+
+```{r, fig.height=8, eval=FALSE}
+plot_compare_foldchange_models(lapply(celltype_ruvseq, function(x) x$de))
+```
+
+# Functional analysis
+## Using RUVseq for Age, Sex, BMI, Batch
+
+```{r}
+celltype_go_ruvseq <- lapply(celltype_ruvseq, function(x) run_go_analysis(x$de, database = "KEGG"))
+saveRDS(celltype_go_ruvseq, file = glue("{params$outdir}/go_ruvseq.rds"))
+```
+
+```{r, fig.height=18, fig.width=6}
+plot_multi_go_results(merge_multi_go_results(celltype_go_ruvseq), fdr = FDR) 
+```
+
+```{r}
+wrap_plot_multi(celltype_go_ruvseq, plot_go_volcano)
+```

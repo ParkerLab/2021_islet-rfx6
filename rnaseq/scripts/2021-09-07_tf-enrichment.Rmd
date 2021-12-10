@@ -1,0 +1,485 @@
+---
+title: "TF motif enrichment in WGCNA"
+date: "2021-01-18"
+output:
+ html_document:
+   code_folding: hide
+   smart: no
+   theme: lumen
+   toc: yes
+editor_options:
+ chunk_output_type: inline
+---
+
+```{r setup}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(glue)
+})
+
+knitr::opts_chunk$set(dev = c('ragg_png', 'cairo_pdf'))
+
+root.dir <- "/home/vivekrai/analyses/2020-01_vanderbilt_rna/"
+source(glue("{root.dir}/scripts/0_utils.R"))
+
+theme_set(theme_custom())
+```
+
+## (AME) TF motif enrichment results
+
+```{r}
+
+db_categories <- c(
+  "encode",
+  "Homo_sapiens",
+  "jaspar",
+  "jolma",
+  "jolma15",
+  "pdx1_meme1",
+  "rfx6_dreme1",
+  "rfx6_dreme9",
+  "rfx6_meme1"
+)
+
+ame_res_path <- glue("{root.dir}work/06_module-peaks-tf-enrichment-v2/tf_enrichment")
+
+ame_res <- lapply(
+  list.files(ame_res_path, "*"), function(celltype) {
+    print(celltype)
+   lapply(list.files(glue("{ame_res_path}/{celltype}/hg19.tss.1kb_ext"), '*'), function(summit_ver) {
+       lapply(list.files(glue("{ame_res_path}/{celltype}/hg19.tss.1kb_ext/{summit_ver}/ame_shuff/"), "*"), function(module) {
+         lapply(db_categories, function(ame_db) {
+           path <- glue("{ame_res_path}/{celltype}/hg19.tss.1kb_ext/{summit_ver}/ame_shuff/{module}/{ame_db}/ame.tsv")
+           ame_df <- tryCatch(read.table(path, sep = "\t", header = T), error=function(e) {return(NULL)})
+           if (!is.null(ame_df)) {
+             ame_df$module <- module
+             ame_df$type <- celltype
+             ame_df$summit_ver <- summit_ver
+             ame_df$ame_db <- ame_db
+           }
+           ame_df
+         }) %>% na.omit() %>% bind_rows()
+     }) %>% bind_rows()
+   }) %>% bind_rows()
+  }) %>% bind_rows() %>%
+  mutate(module = gsub("Module-", "", module), enrichment = (TP + 1) / (FP + 1)) %>%
+  mutate(logEnrichment = log2(enrichment))
+```
+
+## Using shuffled sequences
+
+```{r}
+ame_res_shuff <- ame_res %>% filter(module != "ALL", module != "NO-MODULE") %>%
+  mutate(motif_alt_ID = ifelse(is.na(motif_alt_ID), motif_ID, motif_alt_ID)) %>%
+  group_by(type, summit_ver, ame_db, module) %>%
+  mutate(zscore_logEnrichment = scale(logEnrichment))
+```
+
+```{r}
+write.table(ame_res_shuff, file = glue("{root.dir}work/06_module-peaks-tf-enrichment-v2/tf_enrichment/2021-08-17_all-shuff-results-combined.tsv"), quote = F, sep = "\t", col.names = T, row.names = F)
+```
+
+### Summary
+
+*How many TFs per summit extension?*
+
+```{r}
+ame_res_shuff %>%
+  group_by(summit_ver, type) %>%
+  dplyr::summarize(n_TF = n())
+```
+
+*What is the distribution of enrichment values for all summit extensions?*
+
+```{r}
+ame_res_shuff %>%
+  ggplot(aes(x = logEnrichment, y = summit_ver, fill = summit_ver)) +
+  ggridges::geom_density_ridges() +
+  geom_vline(aes(xintercept = 0), linetype = 'dashed') +
+  labs(title = "Distribution of log2(Enrichment)")
+```
+
+```{r, fig.height = 8, fig.width = 5}
+ame_res_shuff %>%
+  ggplot(aes(logEnrichment, -log10(adj_p.value))) +
+  geom_point() +
+  gghighlight::gghighlight(grepl("RFX", motif_alt_ID) & module == "1") +
+  facet_wrap(summit_ver ~ type, ncol = 2)
+```
+
+*What does the enrichment table look like for RFX6 TF?*
+
+```{r, fig.height = 4, fig.width = 8}
+ame_res_shuff %>%
+  dplyr::filter(grepl("RFX6", motif_alt_ID)) %>%
+  ggplot() +
+  geom_point(aes(x = module, y = summit_ver, size = -log10(adj_p.value),fill = logEnrichment), shape = 21, col = 'black') +
+  facet_wrap(~type+ame_db, scales = "free_x", ncol = 1) +
+  labs(title = "Enrichment z-score of RFX6 across modules") +
+  scale_fill_gradient2(low = "blue", high = "red")
+```
+
+
+### Which summit extension works better?
+
+```{r}
+ame_res_shuff %>%
+  dplyr::select(motif_ID, type, module, summit_ver, enrichment) %>%
+  pivot_wider(id_cols = c(motif_ID, type, module), names_from = summit_ver, values_from = enrichment) %>%
+  ggplot(aes(`50_bp_ext`, `100_bp_ext`)) +
+  scale_x_log10() +
+  scale_y_log10() +
+  naniar::geom_miss_point(size = .5) +
+  geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed') + 
+  geom_smooth(method = "lm", se = F) +
+  facet_wrap(~type) +
+  labs(title = "Enrichment: (TP + 1) / (FP + 1)")
+```
+
+```{r}
+ame_res_shuff %>%
+    dplyr::select(motif_ID, type, module, summit_ver, adj_p.value) %>%
+    pivot_wider(id_cols = c(motif_ID, type, module), names_from = summit_ver, values_from = adj_p.value) %>%
+    ggplot(aes(-log10(`50_bp_ext`), -log10(`100_bp_ext`))) +
+    naniar::geom_miss_point(size = .5) +
+    geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed') + 
+    facet_wrap(~type) +
+    labs(title = "-log10(p-values)")
+```
+
+
+```{r}
+ame_res_shuff %>%
+  dplyr::select(motif_alt_ID, type, module, summit_ver, enrichment) %>%
+  pivot_wider(id_cols = c(motif_alt_ID, type, module), names_from = summit_ver, values_from = enrichment) %>%
+  ggplot(aes(`20_bp_ext`, `50_bp_ext`)) +
+  scale_x_log10() +
+  scale_y_log10() +
+  naniar::geom_miss_point(size = .5) +
+  geom_smooth(method = "lm", se = F) +
+  facet_wrap(~type) +
+  geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed') + 
+  labs(title = "Enrichment: (TP + 1) / (FP + 1)")
+```
+
+```{r}
+ame_res_shuff %>%
+    dplyr::select(motif_ID, type, module, summit_ver, adj_p.value) %>%
+    pivot_wider(id_cols = c(motif_ID, type, module), names_from = summit_ver, values_from = adj_p.value) %>%
+    ggplot(aes(-log10(`50_bp_ext`), -log10(`20_bp_ext`))) +
+    naniar::geom_miss_point(size = .5) +
+    geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed') + 
+    facet_wrap(~type) +
+    labs(title = "-log10(p-values)")
+```
+
+```{r}
+# check what RFX-family TFs are present
+unique(ame_res_shuff %>% filter(grepl("RFX|rfx", motif_alt_ID)) %>% pull(motif_alt_ID))
+```
+
+### Main stuff: What's up with Beta Module #1
+
+```{r}
+beta_ame_res <- ame_res_shuff %>%
+  dplyr::filter(type == "Beta", module == "1") %>%
+  dplyr::select(motif_alt_ID, type, module, summit_ver, logEnrichment, adj_p.value, ame_db)
+```
+
+```{r}
+beta_ame_res_wide <- beta_ame_res %>%
+  pivot_wider(id_cols = c(type, module, ame_db, motif_alt_ID), names_from = summit_ver, values_from = logEnrichment)
+
+ggplot(beta_ame_res_wide, aes(`50_bp_ext`, `100_bp_ext`)) +
+  naniar::geom_miss_point() +
+  geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed') + 
+  ggrepel::geom_text_repel(data = subset(beta_ame_res_wide, grepl("RFX|rfx", motif_alt_ID)), aes(label = motif_alt_ID), min.segment.length = 0) +
+  geom_smooth(method = "lm", se = F) +
+  facet_wrap(~type) +
+  labs(title = "log Enrichment")
+```
+
+```{r}
+ggplot(beta_ame_res_wide, aes(`50_bp_ext`, `20_bp_ext`)) +
+  naniar::geom_miss_point() +
+  geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed') + 
+  ggrepel::geom_text_repel(data = subset(beta_ame_res_wide, grepl("RFX", motif_alt_ID)), aes(label = motif_alt_ID), min.segment.length = 0) +
+  geom_smooth(method = "lm", se = F) +
+  facet_wrap(~type) +
+  labs(title = "log Enrichment")
+```
+
+```{r}
+beta_ame_res_wide_pval <- beta_ame_res %>%
+  pivot_wider(id_cols = c(motif_alt_ID, type, module), names_from = summit_ver, values_from = adj_p.value)
+
+ggplot(beta_ame_res_wide_pval, aes(-log10(`50_bp_ext`), -log10(`100_bp_ext`))) +
+  naniar::geom_miss_point() +
+  geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed') + 
+  ggrepel::geom_text_repel(data = subset(beta_ame_res_wide_pval,
+                                         grepl("RFX|rfx", motif_alt_ID)), aes(label = motif_alt_ID), min.segment.length = 0, max.overlaps = 20) +
+  geom_smooth(method = "lm", se = F) +
+  facet_wrap(~type) +
+  labs(title = "-log10(p-value)")
+```
+
+```{r}
+ggplot(beta_ame_res_wide_pval, aes(-log10(`50_bp_ext`), -log10(`20_bp_ext`))) +
+  naniar::geom_miss_point() +
+  geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed') + 
+  ggrepel::geom_text_repel(data = subset(beta_ame_res_wide_pval,
+                                         grepl("RFX", motif_alt_ID) | -log10(`50_bp_ext`) > 40), aes(label = motif_alt_ID), min.segment.length = 0, max.overlaps = 20) +
+  geom_smooth(method = "lm", se = F) +
+  facet_wrap(~type) +
+  labs(title = "-log10(p-value)")
+```
+
+*Using select TFs, show enrichment across modules*
+
+```{r, fig.width = 11, fig.height = 8}
+ame_res_shuff %>%
+  dplyr::filter(summit_ver == "50_bp_ext", type == "Beta") %>%
+  dplyr::mutate(motif_group = ifelse(grepl("RFX", motif_alt_ID), "RFX", motif_alt_ID)) %>%
+  dplyr::filter(grepl("RFX|MAFA|MAFB|PAX6|FOXO1|HNF1|CTCF|rfx|pdx$", motif_alt_ID)) %>%
+  #dplyr::mutate(ame_db = ifelse(grepl("rfx|pdx", motif_alt_ID), "custom", ame_db)) %>%
+  #dplyr::filter(ame_db == "custom") %>%
+  ggplot(aes(x = module, y = motif_alt_ID), col = 'black') +
+  #geom_tile(aes(fill = logEnrichment)) +
+  geom_point(aes(size = -log10(adj_p.value), fill = logEnrichment), shape = 21, col = 'black') +
+  #facet_wrap(~ame_db, scales = "free_y", ncol = 1) +
+  ggpubr::grids(axis = "xy") +
+  scale_fill_gradient2(low = "blue", high = "red") +
+  labs(title = "TFs across modules (50 bp ext)")
+```
+
+```{r}
+ggplot(beta_ame_res %>% filter(summit_ver == "50_bp_ext"),  aes(logEnrichment, -log10(adj_p.value))) +
+  geom_point() +
+  gghighlight::gghighlight(grepl("RFX|rfx", motif_alt_ID) | logEnrichment > 4 | -log10(adj_p.value) > 40) +
+  ggrepel::geom_text_repel(aes(label = motif_alt_ID))
+```
+
+
+```{r}
+ame_res_shuff %>%
+  dplyr::filter(type == "Beta", summit_ver == "50_bp_ext", module != "ALL", ame_db %in% c("Homo_sapiens", "rfx6_dreme1", "rfx6_dreme9", "rfx6_meme1")) %>%
+  dplyr::filter(grepl("RFX|MAFA|MAFB|PAX6|FOXO1|HNF1|rfx|CTCF$|PDX$", motif_alt_ID)) %>%
+  dplyr::mutate(motif_alt_ID = (gsub("\\(|\\)", "", motif_alt_ID))) %>%
+  mutate(module = as.numeric(module)) %>%
+  mutate(module = factor(module, levels = 0:max(module))) %>%
+  ggplot(aes(x = module, y = motif_alt_ID), col = 'black') +
+  #geom_tile(aes(fill = zscore_logEnrichment)) +
+  #geom_point(aes(size = -log10(adj_p.value)), shape = 21, col = 'black') +
+  geom_point(aes(fill = logEnrichment, size = -log10(adj_p.value)), shape = 21, col = 'black') +
+  #geom_rect(aes(xmin = 22.5, xmax = 23.5, ymin = 0, ymax = 20), fill = NA, col = "black")  +
+  #geom_rect(aes(xmin = 6.5, xmax = 7.5, ymin = 0, ymax = 20), fill = NA, col = "black")  +
+  #geom_rect(aes(xmin = 8.5, xmax = 9.5, ymin = 0, ymax = 20), fill = NA, col = "black")  +
+  #geom_rect(aes(xmin = 1.5, xmax = 2.5, ymin = 0, ymax = 20), fill = NA, col = "black")  +
+  #facet_wrap(~type, scales = "free_x", ncol = 1) +
+  ggpubr::grids(axis = "xy") +
+  scale_fill_gradient2(low = "blue", high = "red") +
+  scale_x_discrete(drop = F) +
+  labs(title = "logEnrichment of TFs across modules (50 bp ext)", y = "", x = "Module") +
+  theme_custom()
+
+save_plot(filename = glue("{root.dir}/figures/draft-figs/tf/beta_rfx-polished-v2.pdf"), base_height = 4, base_width = 14)
+```
+
+```{r}
+ame_res_shuff %>%
+  dplyr::filter(type == "Beta", summit_ver == "50_bp_ext", module != "ALL", ame_db %in% c("Homo_sapiens")) %>%
+  dplyr::filter(grepl("RFX|MAFA|MAFB|PAX6|FOXO1|HNF1|rfx|CTCF$|PDX$", motif_alt_ID)) %>%
+  dplyr::mutate(motif_alt_ID = (gsub("\\(|\\)", "", motif_alt_ID))) %>%
+  mutate(module = as.numeric(module)) %>%
+  mutate(module = factor(module, levels = 0:max(module))) %>%
+  ggplot(aes(x = module, y = motif_alt_ID), col = 'black') +
+  geom_tile(aes(fill = logEnrichment)) +
+  geom_point(aes(size = -log10(adj_p.value)), shape = 21, col = 'black') +
+  ggpubr::grids(axis = "xy") +
+  scale_fill_gradient2(low = "blue", high = "red") +
+  scale_x_discrete(drop = F) +
+  labs(title = "log2Enrichment of TFs across modules (50 bp ext)", y = "", x = "Module", fill = "log2(Enrichment)") +
+  theme_custom()
+
+save_plot(filename = glue("{root.dir}/figures/draft-figs/tf/beta_rfx-polished-v3.pdf"), base_height = 3.5, base_width = 14)
+```
+
+```{r}
+ame_res_shuff %>%
+  dplyr::filter(type == "Beta", summit_ver == "50_bp_ext", module != "ALL", ame_db == "Homo_sapiens") %>%
+  dplyr::mutate(motif_group = ifelse(grepl("RFX", motif_alt_ID), "RFX", motif_alt_ID)) %>%
+  dplyr::filter(grepl("RFX|MAFA|MAFB|PAX6|FOXO1|HNF1|CTCF$|PDX$", motif_group)) %>%
+  dplyr::group_by(type, summit_ver, module, motif_group) %>%
+  dplyr::summarize(
+    mean_enrichment = mean(zscore_logEnrichment),
+    mean_pval = survcomp::combine.test(adj_p.value)
+  ) %>%
+  ggplot(aes(x = module, y = motif_group), col = 'black') +
+  geom_tile(aes(fill = mean_enrichment)) +
+  geom_point(aes(size = -log10(mean_pval)), shape = 21, col = 'black') +
+  facet_wrap(~type, scales = "free_x", ncol = 1) +
+  ggpubr::grids(axis = "xy") +
+  scale_fill_gradient2(low = "blue", high = "red") +
+  labs(title = "Mean z-score logEnrichment of TFs across modules (50 bp ext)", y = "") +
+  theme_custom(font_family = "Helvetica")
+
+save_plot(filename = glue("{root.dir}/figures/draft-figs/tf/beta_rfx-collapsed.pdf"), base_height = 3, base_width = 12)
+```
+
+
+
+```{r}
+ggplot(beta_ame_res_wide, aes(`20_bp_ext`, `50_bp_ext`)) +
+  naniar::geom_miss_point() +
+  geom_abline(aes(slope = 1, intercept = 0), linetype = 'dashed') + 
+  ggrepel::geom_text_repel(data = subset(beta_ame_res_wide,
+                                         grepl("RFX", motif_alt_ID) | `50_bp_ext` > 2.5 | `20_bp_ext` > 2.5),
+                           aes(label = motif_alt_ID), min.segment.length = 0) +
+  geom_smooth(method = "lm", se = F) +
+  facet_wrap(~type) +
+  labs(title = "log Enrichment")
+```
+
+```{r}
+beta_ame_res %>% filter(summit_ver == "50_bp_ext") %>% slice_max(enrichment, n = 10)
+```
+
+```{r}
+beta_ame_res_all_mod <- ame_res_shuff %>%
+  dplyr::filter(type == "Beta", module != "ALL", module != "0", ame_db == "Homo_sapiens", !grepl("DBD", motif_alt_ID)) %>%
+  dplyr::select(motif_alt_ID, type, module, summit_ver, zscore_logEnrichment)
+```
+
+```{r, fig.height = 4, fig.width = 6}
+ggplot(beta_ame_res_all_mod %>% filter(summit_ver == "50_bp_ext", module %in% c("1"))) +
+  geom_density(aes(x = (zscore_logEnrichment), col = module), size = 1.2) + 
+  #gghighlight::gghighlight(module %in% c("1")) +
+  ggrepel::geom_text_repel(
+    data = subset(beta_ame_res_all_mod, grepl("RFX|PAX6|FOXO1|HNF1A|ISL|NEUROD1", motif_alt_ID) & summit_ver == "50_bp_ext" & module %in% c("1")),
+    aes(x = zscore_logEnrichment, y = 0, label = motif_alt_ID),
+    size = 4,
+    min.segment.length = 0,
+        force_pull   = 0, # do not pull toward data points
+    nudge_y      = 0.15,
+    direction    = "x",
+    angle        = 90,
+    hjust        = 0,
+    segment.size = 0.2,
+    max.iter = 1e4, max.time = 1
+  ) +
+  labs(title = "Beta cell, Module #1, 50-bp-ext", y = "Density", x = "Z-score log enrichment")
+```
+
+
+
+The enrichment values for both extensions look comparable; except there's slight trend towards better enrichment scores for motifs with higher scores in the 50_bp extension category.
+
+```{r}
+plot_tf_heatmap <- function(ame_res, motifs, summit.ver, celltype, module.order = NULL, ...) {
+  plot_ame_df <- ame_res %>%
+    dplyr::filter(type == celltype, summit_ver == summit.ver, module != "ALL", module != "0") %>%
+    dplyr::mutate(neglog10pval = -log10(adj_p.value), enrichment = TP/(FP + 1)) %>%
+    dplyr::select(module, motif_alt_ID, enrichment) %>%
+    pivot_wider(names_from = module, values_from = enrichment) %>%
+    column_to_rownames(var = "motif_alt_ID") %>%
+    as.matrix(.)
+  
+  if (!is.null(module.order)) {
+    module.order <- gsub("ME|Module|-", "", module.order)
+    present_cols <- colnames(plot_ame_df)
+    
+    ordered_labels <- module.order[module.order %in% present_cols]
+    plot_ame_df <- plot_ame_df[, ordered_labels]
+  }
+    
+  motifs_idx <- which(grepl(motifs, rownames(plot_ame_df)))
+  
+  motif_annot = rowAnnotation(
+    names = anno_mark(
+      at = motifs_idx,
+      labels = rownames(plot_ame_df)[motifs_idx]
+    )
+  )
+  
+  ComplexHeatmap::Heatmap(
+    plot_ame_df, cluster_rows = F, cluster_columns = F, border = T,
+    col = circlize::colorRamp2(quantile(plot_ame_df, seq(0, 1, .25), na.rm = T), viridis::viridis(5)),
+    right_annotation = motif_annot, show_row_names = F, name = "Enrichment", ...
+  )
+}
+```
+
+```{r}
+motifs_of_interest = "RFX|PAX6|MAFA|MAFB|PDX1|ISL1|NERUDO1|NKX6-6|SIX3|FOXO1|SIX2|PAX4|FOXA2|NKX2-2"
+
+plot_tf_heatmap(ame_res %>% dplyr::filter(!grepl("PERM|SMPL", module)) %>%
+                  dplyr::filter(grepl(motifs_of_interest, motif_alt_ID)),
+                motifs_of_interest, "50_bp_ext", "Beta",
+                module.order = names(ct_data$Beta.cell.RNA$wgcna_net$MEs))
+```
+
+```{r}
+plot_tf_heatmap(ame_res %>%  dplyr::filter(!grepl("PERM|SMPL", module)),
+                motifs_of_interest, "50_bp_ext", "Beta",
+                module.order = names(ct_data$Beta.cell.RNA$wgcna_net$MEs))
+```
+
+```{r}
+plot_tf_heatmap(ame_res %>% dplyr::filter(!grepl("PERM|SMPL", module)) %>%
+                  dplyr::filter(grepl(motifs_of_interest, motif_alt_ID)),
+                motifs_of_interest, "100_bp_ext", "Beta",
+                module.order = names(ct_data$Beta.cell.RNA$wgcna_net$MEs))
+```
+
+```{r}
+plot_tf_heatmap(ame_res %>%  dplyr::filter(!grepl("PERM|SMPL", module)),
+                motifs_of_interest, "100_bp_ext", "Beta",
+                module.order = names(ct_data$Beta.cell.RNA$wgcna_net$MEs))
+```
+
+
+### Is there a correlation between number of significant TFs and module size
+
+```{r}
+summit_linked_peak_stats <- lapply(
+  list.files(ame_res_path, "*"), function(celltype) {
+   lapply(list.files(glue("{ame_res_path}/{celltype}/hg19.tss.1kb_ext"), '*'), function(summit_ver) {
+     print(summit_ver)
+     lapply(list.files(glue("{ame_res_path}/{celltype}/hg19.tss.1kb_ext/{summit_ver}/summit-linked-peaks"), "*"), function(module) {
+       num_lines <- R.utils::countLines(
+         glue("{ame_res_path}/{celltype}/hg19.tss.1kb_ext/{summit_ver}/summit-linked-peaks/{module}")
+       )
+       data.frame(
+         module = module,
+         type = celltype,
+         summit_ver = summit_ver,
+         num_peaks = num_lines
+       )
+     }) %>% bind_rows()
+   }) %>% bind_rows()
+  }) %>% bind_rows() %>%
+  mutate(module = gsub("Module-", "", gsub(".bed", "", module)))
+```
+
+```{r}
+ame_summary_df <- ame_res %>%
+  filter(module != "ALL") %>%
+  group_by(type, summit_ver, module) %>%
+  summarise(num_motifs = n()) %>%
+  left_join(summit_linked_peak_stats)
+```
+
+```{r}
+ggplot(ame_summary_df %>% filter(!grepl("PERM|SMPL", module)), aes(num_peaks, num_motifs)) + 
+  geom_point() + 
+  facet_grid(summit_ver ~ type, scales = "free") + geom_smooth(method = "lm") +
+  ggrepel::geom_text_repel(aes(label = module))
+```
+
+
+```{r}
+ggplot(ame_summary_df %>% filter(grepl("SMPL", module)), aes(num_peaks, num_motifs)) + 
+  geom_point() + 
+  facet_grid(summit_ver ~ type, scales = "free") + geom_smooth(method = "lm") +
+  ggrepel::geom_text_repel(aes(label = module))
+```

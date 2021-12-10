@@ -1,0 +1,16 @@
+libraries:
+    3528_CV1:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3528_CV1_rg1:
+                '1': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/rna/3528_CV1_R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/rna/3528_CV1_R2.fastq.gz
+    3528_CV2:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3528_CV2_rg1:
+                '1': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/rna/3528_CV2_R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-06_pilot-rfx6/data/fastq/rna/3528_CV2_R2.fastq.gz
+

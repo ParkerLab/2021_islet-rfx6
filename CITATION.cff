@@ -7,6 +7,13 @@ message: >-
   Please cite our manuscript from the preferred-citation
   section if you use code or data from this repository.
 type: software
+contact:
+  - email: scjp@umich.edu
+    family-names: Parker
+    given-names: Stephen CJ
+  - email: vivekrai@umich.edu
+    family-names: Rai
+    given-names: Vivek
 preferred-citation:
   title: RFX6-mediated dysregulation defines human β cell dysfunction in early type 2 diabetes
   authors:
@@ -22,9 +29,65 @@ preferred-citation:
       family-names: Rai
       email: vivekrai@umich.edu
       affiliation: University of Michigan, Ann Arbor
+    - given-names: Dai
+      family-names: Chunhua
+    - given-names: Orchard
+      family-names: Peter
+    - given-names: Hopkirk
+      family-names: Alexander L
+    - given-names: Reihsmann
+      family-names: Conrad V
+    - given-names: Tao
+      family-names: Yicheng
+    - given-names: Fan
+      family-names: Simin
+    - given-names: Shrestha
+      family-names: Shristi
+    - given-names: Varshney
+      family-names: Arushi
+    - given-names: Wright
+      family-names: Jordan J
+    - given-names: Pettway
+      family-names: Yasminye D
+    - given-names: Ventresca
+      family-names: Christa
+    - given-names: Agarwala
+      family-names: Samir
+    - given-names: Aramandla
+      family-names: Radhika
+    - given-names: Poffenberger
+      family-names: Greg
+    - given-names: Jenkins
+      family-names: Regina
+    - given-names: Hart
+      family-names: Nathaniel J
+    - given-names: Greiner
+      family-names: Dale L
+    - given-names: Shultz
+      family-names: Leonard D
+    - given-names: Bottino
+      family-names: Rita
+    - name: HPAP Consortium
+    - given-names: Liu
+      family-names: Jie
+    - given-names: Parker
+      family-names: Stephen CJ
+    - given-names: Powers
+      family-names: Alvin C
+    - given-names: Brissova
+      family-names: Marcela
   type: article
 authors:
   - given-names: Vivek
     family-names: Rai
     email: vivekrai@umich.edu
     affiliation: University of Michigan, Ann Arbor
+keywords:
+  - single-cell
+  - pancreas
+  - rfx6
+  - multiome
+  - 10x
+  - wgcna
+license:
+  - GPL-3.0-or-later

@@ -1,0 +1,30 @@
+sciatac_path = "/lab/work/vivekrai/2018_NIH_Islets.snatacseq.v2/work/2019-03-01_clustering-final"
+
+desc "Link BAMs for peak calling"
+task :link_sciatac_bams do
+  puts <<~EOS
+    mkdir -p data/sciatac_bams
+
+    ln -s #{sciatac_path}/bams/4.bam data/sciatac_bams/Alpha.bam
+    ln -s #{sciatac_path}/bam2bed/4.bam data/sciatac_bams/Alpha.bed
+    ln -s #{sciatac_path}/bam2bed/1.bam data/sciatac_bams/Beta.bed
+    ln -s #{sciatac_path}/bams/1.bam data/sciatac_bams/Beta.bam
+  EOS
+end
+
+desc "Prepare TSS BED files for selecting summits"
+task :extend_tss do
+  SCRIPT = "#{root}/bin/gencodeGTFtoTSS.py"
+
+  puts <<~EOS
+    #{SCRIPT} #{root}/data/gtf/gencode.v19.annotation.gtf.gz -l 1000 -r 1000 | \
+      grep -v 'chrM' | grep -v 'chrY' > data/tss_defs/hg19.tss.1kb_ext.bed
+  EOS
+end
+
+desc "Run Nextflow pipeline to get module linked summits and motif enrichment"
+task :run do
+  puts <<~EOS
+    nextflow run main.nf -c nextflow.config -resume
+  EOS
+end

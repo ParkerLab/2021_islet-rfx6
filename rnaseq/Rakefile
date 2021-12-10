@@ -1,0 +1,176 @@
+require 'time'
+require 'rake/phony'
+
+ENV["ROOT"] = "/home/vivekrai/analyses/2020-01_vanderbilt_rna"
+
+def root()
+  ENV['ROOT']
+end
+
+def dev()
+  if ENV['NXF_DEV'] then '--dev' else '' end
+end
+
+def control(tag)
+  "#{ENV['ROOT']}/control/#{tag}"
+end
+
+def work(tag)
+  "#{ENV['ROOT']}/work/#{tag}"
+end
+
+def nf_template(nf,
+                tag,
+                conf='base.conf',
+                work="/lab/work/vivekrai/nf-tmp",
+                profile='cluster',
+                reports=false,
+                bg=false,
+                dev=false,
+                resume=true)
+
+  bg = if bg then 'bg' else '' end
+  dev = if dev then '--dev' else '' end
+  bg = if dev then '' else bg end # reset bg if dev is true
+  resume = if not resume then '' else '-resume' end
+  reports = if report then '-with-trace .logs/trace.txt -with-report .logs/report.html' else '' end
+
+  "cd #{control(tag)} && mkdir -p .logs && \
+    nextflow #{nf} #{bg} -c #{conf} #{dev} #{resume} #{reports} -w #{work} -profile #{profile} --outdir #{work(tag)} --root #{ENV['ROOT']}"
+end
+
+
+namespace :data do
+  desc "Clean secretion assay data"
+  task :clean_assay_data do
+    tag = "2020-03-23_assay-data"
+    sh "Rscript ./scripts/00_clean_assay_data.R #{work(tag)}"
+  end
+end
+
+
+namespace :map_qc do
+  desc "Run QoRTs on all aligned BAMs (as is, pre-aligned to hg38 reference)"
+  task :process_bams do |t|
+    tag = "2020-01-26_preprocess"
+    sh "#{nf_template('main.nf', tag)}"
+  end
+
+  desc "Remap all BAMs, run QoRTs, TIN, featureCounts with hg19 as reference"
+  task :remap do |t|
+    tag = "2020-01-26_remap"
+    sh "#{nf_template('remap.nf', tag)}"
+  end
+
+  desc "Collect QoRTs metrics; export count files etc"
+  task :qorts_export do
+    # changed on 2021-02-01; however, the directory still contains data from earlier runs
+    tag = "2020-02-14_qc_summary"
+    sh "Rscript ./scripts/01_qorts.R \
+      --qorts-dir /lab/work/vivekrai/2020-01_vanderbilt_rna/work/2020-01-26_remap/qorts/pre-prune \
+      --out-dir #{work(tag)} \
+      --covariates-file /home/vivekrai/analyses/2020-01_vanderbilt_rna/sample_info/covariates.txt \
+      --donor-sample-file /home/vivekrai/analyses/2020-01_vanderbilt_rna/sample_info/rna_samples.txt"
+
+    sh "Rscript ./scripts/03_counts.R #{root()} #{work(tag)}"
+  end
+end
+
+
+namespace :dge do
+  desc "Run DE analysis"
+  task :deseq do
+    tag = "dge-analysis/#{Time.now.strftime('%Y-%m-%d')}"
+    # sh "mkdir -p #{work(tag)}"
+
+    puts "# drmr:job nodes=1 processor_memory=10000 time_limit=1:00:00 node_properties=wolverine"
+    ["Alpha.cell.RNA", "Beta.cell.RNA", "Whole.Islet.RNA"].each do |celltype|
+      ["Disease"].each do |contrast|
+        [0.25].each do |sample_frac|
+          [10].each do |min_reads|
+            output_dir = "#{work(tag)}/#{celltype}-#{contrast}-#{min_reads}-#{sample_frac}"
+
+            puts <<~EOS
+            mkdir -p #{output_dir} && \
+              Rscript -e \
+                \"rmarkdown::render('./scripts/07_differential_analysis.Rmd', \
+                    output_file='#{output_dir}/results.html', \
+                    params=list( \
+                      celltype='#{celltype}', \
+                      contrast='#{contrast}', \
+                      min_fraction_of_sample=#{sample_frac}, \
+                      min_reads_per_sample=#{min_reads}, \
+                      outdir='#{output_dir}') \
+                    ) \
+                \"
+            EOS
+          end
+        end
+      end
+    end
+  end
+
+  desc "Share data normalized expression data with collaborators"
+  task :share_norm_data do
+    tag = "dge-analysis/2021-02-05_normalized-data-share"
+    mkdir_p("#{work(tag)}")
+    sh "Rscript src/2020-11-06_share-data.R"
+  end
+end
+
+
+namespace :network do
+  desc "Run WGCNA"
+  task :wgcna do
+    tag = "wgcna-explore/#{Time.now.strftime('%Y-%m-%d')}"
+
+    puts "# drmr:job nodes=1 processors=2 processor_memory=35000 time_limit=1:00:00 node_properties=wolverine"
+    ["Beta.cell.RNA", "Alpha.cell.RNA", "Whole.Islet.RNA"].each do |celltype|
+      ["power-80"].each do |group|
+        # [0.15, 0.20, 0.25, 0.30].each do |cut_height|
+        [0.20].each do |cut_height|
+          mkdir_p("#{work(tag)}/#{celltype}/#{group}_cut-#{cut_height}")
+          puts <<~EOS
+          Rscript -e \
+            \"rmarkdown::render('./scripts/08_wgcna.Rmd', \
+              output_file='#{work(tag)}/#{celltype}/#{group}_cut-#{cut_height}/#{group}_cut-#{cut_height}.html', \
+              params=list( \
+                celltype='#{celltype}', \
+                group='#{group}', \
+                merge_cut_height=#{cut_height}, \
+                outdir='#{work(tag)}') \
+              ) \
+            \"
+          EOS
+        end
+      end
+    end
+  end
+
+  desc "Explore WGNCA parameters"
+  task :wgcnatest do
+    tag = "wgcna-explore/2021-04-07"
+    puts "# drmr:job nodes=1 processors=4 processor_memory=15000 time_limit=2:00:00 node_properties=wolverine"
+    ["Beta.cell.RNA", "Alpha.cell.RNA", "Whole.Islet.RNA"].each do |celltype|
+      puts <<-EOS
+        Rscript src/2021-04-07_pick-wgcna-params.R --counts \
+          #{work(tag)}/#{celltype}/power-80_cut-0.15/celltype-norm-counts.rds \
+          --outfile #{work(tag)}/#{celltype}/wgcnatest.rds \
+          --cores 4
+        EOS
+    end
+  end
+
+
+  desc "Create set of module linked peaks"
+  task :create_module_linked_peaks do
+    tag = "module-linked-peaks"
+    sh "cd #{control(tag)} && rake run"
+  end
+
+  desc "Run GARFIELD trait enrichment on module linked peaks"
+  task :run_garfield do
+    tag = "module-peaks_garfield"
+    sh "cd #{control(tag)} && rake run"
+  end
+end

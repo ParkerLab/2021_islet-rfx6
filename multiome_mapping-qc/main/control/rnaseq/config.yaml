@@ -1,0 +1,58 @@
+libraries:
+    3776-CV-1-3GEX:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776-CV-1-3GEX_rg1:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-1-3GEX_R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-1-3GEX_R2.fastq.gz
+    3776-CV-2-3GEX:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776-CV-2-3GEX_rg1:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-2-3GEX_R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-2-3GEX_R2.fastq.gz
+    3776-CV-3-3GEX:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776-CV-3-3GEX_rg1:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-3-3GEX_R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-3-3GEX_R2.fastq.gz
+    3776-CV-4-3GEX:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776-CV-4-3GEX_rg1:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-4-3GEX_R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-4-3GEX_R2.fastq.gz
+    3776-CV-5-3GEX:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776-CV-5-3GEX_rg1:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-5-3GEX_R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-5-3GEX_R2.fastq.gz
+    3776-CV-6-3GEX:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776-CV-6-3GEX_rg1:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-6-3GEX_R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-6-3GEX_R2.fastq.gz
+    3776-CV-7-3GEX:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776-CV-7-3GEX_rg1:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-7-3GEX_R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-7-3GEX_R2.fastq.gz
+    3776-CV-8-3GEX:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776-CV-8-3GEX_rg1:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-8-3GEX_R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/rna/3776-CV-8-3GEX_R2.fastq.gz
+

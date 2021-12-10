@@ -1,0 +1,162 @@
+libraries:
+    3776_ATAC_CV1:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776_ATAC_CV1_a:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_a.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_a.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_a.R2.fastq.gz
+            3776_ATAC_CV1_b:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_b.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_b.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_b.R2.fastq.gz
+            3776_ATAC_CV1_c:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_c.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_c.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_c.R2.fastq.gz
+            3776_ATAC_CV1_d:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_d.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_d.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV1_d.R2.fastq.gz
+    3776_ATAC_CV2:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776_ATAC_CV2_a:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_a.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_a.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_a.R2.fastq.gz
+            3776_ATAC_CV2_b:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_b.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_b.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_b.R2.fastq.gz
+            3776_ATAC_CV2_c:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_c.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_c.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_c.R2.fastq.gz
+            3776_ATAC_CV2_d:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_d.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_d.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV2_d.R2.fastq.gz
+    3776_ATAC_CV3:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776_ATAC_CV3_a:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_a.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_a.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_a.R2.fastq.gz
+            3776_ATAC_CV3_b:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_b.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_b.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_b.R2.fastq.gz
+            3776_ATAC_CV3_c:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_c.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_c.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_c.R2.fastq.gz
+            3776_ATAC_CV3_d:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_d.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_d.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV3_d.R2.fastq.gz
+    3776_ATAC_CV4:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776_ATAC_CV4_a:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_a.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_a.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_a.R2.fastq.gz
+            3776_ATAC_CV4_b:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_b.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_b.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_b.R2.fastq.gz
+            3776_ATAC_CV4_c:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_c.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_c.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_c.R2.fastq.gz
+            3776_ATAC_CV4_d:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_d.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_d.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV4_d.R2.fastq.gz
+    3776_ATAC_CV5:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776_ATAC_CV5_a:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_a.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_a.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_a.R2.fastq.gz
+            3776_ATAC_CV5_b:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_b.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_b.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_b.R2.fastq.gz
+            3776_ATAC_CV5_c:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_c.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_c.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_c.R2.fastq.gz
+            3776_ATAC_CV5_d:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_d.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_d.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV5_d.R2.fastq.gz
+    3776_ATAC_CV6:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776_ATAC_CV6_a:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_a.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_a.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_a.R2.fastq.gz
+            3776_ATAC_CV6_b:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_b.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_b.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_b.R2.fastq.gz
+            3776_ATAC_CV6_c:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_c.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_c.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_c.R2.fastq.gz
+            3776_ATAC_CV6_d:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_d.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_d.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV6_d.R2.fastq.gz
+    3776_ATAC_CV7:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776_ATAC_CV7_a:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_a.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_a.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_a.R2.fastq.gz
+            3776_ATAC_CV7_b:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_b.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_b.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_b.R2.fastq.gz
+            3776_ATAC_CV7_c:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_c.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_c.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_c.R2.fastq.gz
+            3776_ATAC_CV7_d:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_d.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_d.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV7_d.R2.fastq.gz
+    3776_ATAC_CV8:
+        genome:
+        - hg19-mCherry-mKate2
+        readgroups:
+            3776_ATAC_CV8_a:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_a.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_a.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_a.R2.fastq.gz
+            3776_ATAC_CV8_b:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_b.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_b.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_b.R2.fastq.gz
+            3776_ATAC_CV8_c:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_c.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_c.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_c.R2.fastq.gz
+            3776_ATAC_CV8_d:
+                '1': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_d.R1.fastq.gz
+                '2': /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_d.R3.fastq.gz
+                index: /home/vivekrai/analyses/2021-08_main-rfx6/data/fastq/atac/3776_ATAC_CV8_d.R2.fastq.gz
+

@@ -1,0 +1,423 @@
+---
+title: "Comparing Celltype Modules / Consensus Module Analysis"
+author: "Vivek.Rai"
+date: "3/25/2021"
+output: html_document
+params:
+  count_path: "/lab/work/vivekrai/2020-01_vanderbilt_rna/work/wgcna/2021-03-27"
+  outdir: "/lab/work/vivekrai/2020-01_vanderbilt_rna/work/wgcna-consensus/2021-03-29"
+---
+
+
+```{r setup, include=FALSE}
+options(stringsAsFactors = F, width = 120)
+
+knitr::opts_chunk$set(
+  comment = "",
+  dev = c('png', 'cairo_pdf'),
+  warning = FALSE, message = FALSE, tidy = FALSE,
+  size = "small",
+  cache = TRUE, cache.lazy = FALSE,
+  fig.width = 8, fig.height = 6, fig.keep = 'all'
+)
+seed <- 2020
+
+suppressPackageStartupMessages({
+  library(knitr)
+  library(tidyverse)
+  library(patchwork)
+  library(glue)
+  library(WGCNA)
+})
+
+theme_set(theme_custom())
+
+root.dir <- "/home/vivekrai/analyses/2020-01_vanderbilt_rna"
+source(glue("{root.dir}/scripts/0_utils.R"))
+
+enableWGCNAThreads()
+```
+
+```{r global_vars}
+stopifnot(!is.null(params$outdir))
+stopifnot(!is.null(params$count_path))
+
+FDR <- params$fdr
+min_reads_per_sample <- 10
+min_fraction_of_sample <- .25
+
+dir.create(params$outdir, recursive = T, showWarnings = F)
+
+print(params) # inspect all parameters
+```
+
+# Part 1: Setup
+## Prepare data
+```{r metadata}
+celltypes <- c(
+  "Alpha.cell.RNA",
+  "Beta.cell.RNA",
+  "Whole.Islet.RNA"
+)
+
+celltypes_k <- c(4, 6, 4)
+names(celltypes_k) <- celltypes
+
+ct_data <- list()
+
+for (i in celltypes) {
+  print(glue("Reading {i}.."))
+  ct_data[[i]] <- list(
+    de = readRDS(glue(
+      "{root.dir}/work/dge-analysis/2021-02-05_normalized-data-share/{i}-{celltypes_k[i]}.rds"
+    ))$de$res,
+    wgcna = readRDS(glue(
+      glue("{root.dir}/work/wgcna-explore/2021-04-07/{i}/power-80_cut-0.2/module-assignment.rds")
+    )),
+    wgcna_net = readRDS(glue(
+      glue("{root.dir}/work/wgcna-explore/2021-04-07/{i}/power-80_cut-0.2/blockwiseModules.rds")
+    )),
+    trait_cor_old = readRDS(glue(
+      glue("{root.dir}/work/wgcna-explore/2021-04-07/{i}/power-80_cut-0.2/module-trait-cor.rds")
+    )),
+    go_df = readRDS(glue(
+      glue("{root.dir}/work/wgcna-explore/2021-04-07/{i}/power-80_cut-0.2/mod_GOBP-summary.rds")
+    )),
+    kegg_df = readRDS(glue(
+      glue("{root.dir}/work/wgcna-explore/2021-04-07/{i}/power-80_cut-0.2/mod_KEGG-summary.rds")
+    )),
+    connectivity = readRDS(glue(
+      glue("{root.dir}/work/wgcna-explore/2021-04-07/{i}/power-80_cut-0.2/connectivity.rds")
+    )),
+    mod_mem_scores = readRDS(glue(
+      glue("{root.dir}/work/wgcna-explore/2021-04-07/{i}/power-80_cut-0.2/module-membership-scores.rds")
+    ))
+  )
+}
+```
+
+
+### WGCNA input
+
+```{r}
+n_sets <- 3
+# short_labels <- c("Alpha", "Beta", "Islet")
+multi_expr <- vector(mode = "list", length = n_sets)
+network_type <- "signed hybrid"
+cor_func <- "bicor"
+
+for (i in 1:3) {
+  multi_expr[[i]] = list(data = readRDS(
+    glue("{root.dir}/work/wgcna-explore/2021-04-07/{celltypes[i]}/power-80_cut-0.2/celltype-norm-counts.rds")
+  ))
+}
+names(multi_expr) <- celltypes
+
+common_genes <- base::Reduce(intersect, lapply(1:3, function(i) colnames(multi_expr[[i]]$data)))
+
+# Subset to shared genes
+for (i in 1:3) {
+  multi_expr[[i]]$data = multi_expr[[i]]$data[, common_genes]
+}
+
+checkSets(multi_expr)
+```
+
+# Run WGCNA: Approach 1
+
+# Using `modulePreservation` and `coClustering` approach
+
+```{r load_module_assignments}
+mod_labels <- lapply(celltypes, function(x) {
+  readRDS(glue("{root.dir}/work/wgcna-explore/2021-04-07/{celltypes[i]}/power-80_cut-0.2/module-assignment.rds")) %>%
+    dplyr::filter(ensembl %in% common_genes) %>%
+    pull(module)
+})
+names(mod_labels) <- celltypes
+```
+
+
+```{r}
+preserved_mod <- lapply(1:3, function(i) {
+  WGCNA::modulePreservation(
+    multi_expr,
+    mod_labels,
+    networkType = network_type,
+    referenceNetworks = i,
+    corFnc = cor_func,
+    maxModuleSize = 15000,
+    randomSeed = seed,
+    verbose = 2
+  )
+})
+```
+
+```{r}
+saveRDS(preserved_mod, glue("{params$outdir}/pairwise-module-preservation.rds"))
+```
+
+**Preservation heatmap**
+
+```{r}
+plot_module_preservation <- function(mod_obj, bw = F) {
+  ref <- names(mod_obj$preservation$Z)
+  test <- names(mod_obj$preservation$Z[[ref]])
+  
+  tmp <- NA
+  
+  for (t in test) {
+    df <- mod_obj$preservation$Z[[ref]][[t]]
+    if (is.na(df)) next
+    label <- gsub("inColumnsAlsoPresentIn.", "", t)
+    if (is.na(tmp)) {
+      tmp <- df %>%
+        rownames_to_column(var = "module") %>%
+        dplyr::select(module, Zsummary.pres) %>%
+        dplyr::rename(!!label := Zsummary.pres)
+    } else {
+      tmp <- left_join(
+        tmp,
+        df %>%
+          rownames_to_column(var = "module") %>%
+          dplyr::select(module, Zsummary.pres) %>%
+          dplyr::rename(!!label := Zsummary.pres),
+        by = "module"
+      )
+    }
+  }
+  cell_fun <- NULL
+  
+  if (bw) {
+    cell_fun <- function(j, i, x, y, width, height, fill) {
+      if(tmp[j, i] > 10) {
+        grid.rect(x = x, y = y, width = width, height = height, 
+              gp = gpar(col = "grey", fill = "darkred"))
+        # grid.text("**", x, y)
+      } else if (tmp[j, i] > 2) {
+        grid.rect(x = x, y = y, width = width, height = height, 
+              gp = gpar(col = "grey", fill = "red"))
+      } else {
+        grid.rect(x = x, y = y, width = width, height = height, 
+              gp = gpar(col = "grey", fill = "gray70"))
+      }
+    }
+  }
+  
+    # heatmap_legend_param = list(
+    #   at = round(quantile(as.matrix(tmp), probs = c(.25, .5, .75, .9, 1)), 2),
+    #   legend_gp = gpar(fill = circlize::colorRamp2(
+    #     round(quantile(as.matrix(tmp), probs = c(.25, .5, .75, .9, 1)), 2), colors = c("white", "white", "gray", "red", "darkred"))
+    #   )
+    # ),
+    
+  ref_label <- gsub("ref.", "", ref)
+  
+  tmp <- tmp %>% as_tibble() %>% column_to_rownames("module")
+  
+  # breaks <- round(quantile(as.matrix(tmp), probs = c(.25, .5, .75, .9, 1)), 2)
+  # breaks <- c(0, 2, 10, 40)
+  
+  list(
+    data = tmp,
+    plot = ComplexHeatmap::Heatmap(
+    t(tmp), column_title =  glue("Modules ({ref_label}) - Reference"),
+    row_title = "Tissues", name = "Zsummary", col = c("white", "red", "darkred"),
+    # heatmap_legend_param = list(
+    #   color_bar = "discrete",
+    #   at = breaks,
+    #   legend_gp = gpar(fill = col_fun(breaks))
+    # ),
+    cell_fun = cell_fun,
+    border = T
+  ))
+}
+```
+
+```{r, fig.width=12, fig.height=5}
+plot_module_preservation(preserved_mod[[2]])$plot
+```
+
+```{r}
+ggplot(beta_prev_res$data %>% rownames_to_column("module") %>% pivot_longer(cols = -c(module), names_to = "Celltype", values_to = "Preservation"), aes(Celltype, Preservation)) +  geom_line(aes(group = module, col = Preservation), size = 2, alpha = .5) +geom_point() + ggrepel::geom_text_repel(aes(label = module)) + scale_color_gradient(low = "white", high = "red")
+```
+
+### Co-clustering
+
+```{r co_clustering}
+co_cluster_res <- apply(combn(celltypes, 2), 2, function(x) {
+  print(paste(x[1], x[2], sep = "-"))
+  WGCNA::coClustering(
+    mod_labels[[x[1]]],
+    mod_labels[[x[2]]],
+    tupletSize = 2,
+    unassignedLabel = 0
+  )
+})
+
+names(co_cluster_res) <- apply(combn(celltypes, 2), 2, function(x) {
+  paste(x[1], x[2], sep = "-")
+})
+```
+
+
+# Run WGCNA: Approach 2
+
+## Selecting common `k`
+
+```{r choose_k}
+powers <- c(seq(4,14,by=1), seq(16,20, by=2))
+power_tables = vector(mode = "list", length = n_sets);
+
+# Call the network topology analysis function for each set in turn
+for (set in 1:n_sets)
+  power_tables[[set]] = list(
+    data = WGCNA::pickSoftThreshold(
+      multi_expr[[set]]$data,
+      powerVector=powers,
+      verbose = 2,
+      blockSize = 15000,
+      networkType = network_type,
+      corFnc = cor_func)[[2]],
+  )
+
+WGCNA::collectGarbage()
+
+# Plot the results:
+colors = c("black", "blue", "red")
+
+# Will plot these columns of the returned scale free analysis tables
+plotCols = c(2,5,6,7)
+colNames = c(
+  "Scale Free Topology Model Fit",
+  "Mean connectivity",
+  "Median connectivity",
+  "Max connectivity"
+)
+
+# Get the minima and maxima of the plotted points
+ylim = matrix(NA, nrow = 2, ncol = 4);
+
+for (set in 1:n_sets)
+{
+  for (col in 1:length(plotCols))
+  {
+    ylim[1, col] = min(ylim[1, col], power_tables[[set]]$data[, plotCols[col]], na.rm = TRUE);
+    ylim[2, col] = max(ylim[2, col], power_tables[[set]]$data[, plotCols[col]], na.rm = TRUE);
+  }
+}
+
+# Plot the quantities in the chosen columns vs. the soft thresholding power
+sizeGrWindow(8, 6)
+
+pdf(file = glue("{params$outdir}/scale_free_analysis.pdf"), width = 8, height = 6)
+par(mfcol = c(2,2));
+par(mar = c(4.2, 4.2 , 2.2, 0.5))
+cex1 = 0.7;
+
+for (col in 1:length(plotCols)) for (set in 1:n_sets)
+{
+  if (set==1)
+  {
+    plot(power_tables[[set]]$data[,1], -sign(power_tables[[set]]$data[,3])*power_tables[[set]]$data[,2],
+         xlab="Soft Threshold (power)",ylab=colNames[col],type="n", ylim = ylim[, col],
+         main = colNames[col]);
+    addGrid();
+  }
+  if (col==1)
+  {
+    text(power_tables[[set]]$data[,1], -sign(power_tables[[set]]$data[,3])*power_tables[[set]]$data[,2],
+         labels=powers,cex=cex1,col=colors[set]);
+  } else
+    text(power_tables[[set]]$data[,1], power_tables[[set]]$data[,plotCols[col]],
+         labels=powers,cex=cex1,col=colors[set]);
+  if (col==1)
+  {
+    legend("bottomright", legend = short_labels, col = colors, pch = 20) ;
+  } else
+    legend("topright", legend = short_labels, col = colors, pch = 20) ;
+}
+
+dev.off();
+```
+
+```{r which_k}
+power_k_min <- max(
+  sapply(power_tables, function(x) {
+    x$data$Power[which(x$data$SFT.R.sq > .80)[1]]
+  })
+)
+
+print(glue("INFO: got k = {power_k_min} for >80% fit for all celltypes."))
+```
+
+## Running WGCNA with k = `r power_k_min`
+
+```{r block_consensus}
+net <- WGCNA::blockwiseConsensusModules(
+  multi_expr,
+  power = power_k_min,
+  minModuleSize = 20,
+  saveTOMs = TRUE,
+  loadTOM = TRUE,
+  corType = cor_func,
+  networkType = network_type,
+  saveTOMFileBase = glue("{params$outdir}/blockwiseTOM"),
+  maxBlockSize = 16000,
+  numericLabels = TRUE,
+  randomSeed = seed,
+  pamRespectsDendro = FALSE,
+  verbose = 2
+)
+
+saveRDS(net, file=glue("{params$outdir}/networkConstruction.rds"))
+```
+
+```{r fig_eigen_dendro}
+plotDendroAndColors(
+  net$dendrograms[[1]], net$colors, "Module colors",
+  main = "Gene dendrogram and module colors in block 1", dendroLabels = FALSE,
+  hang = 0.03, addGuide = TRUE, guideHang = 0.05
+)
+```
+
+**How many modules are detected?**
+
+```{r print_mod_summary}
+length(table(net$colors))
+```
+
+```{r save_mod_assign}
+summary_info <- as.data.frame(net$colors) %>%
+  rownames_to_column('ensembl') %>%
+  dplyr::rename(module = `net$colors`)
+
+summary_info <- summary_info %>%
+  mutate(
+    symbol = get_mapping(summary_info$ensembl)$SYMBOL
+  )
+
+saveRDS(file = glue("{params$outdir}/module-assignment.rds"), summary_info)
+```
+
+## Summarize module results
+
+```{r fig_num_modules, fig.width=2, fig.height=5}
+qplot('', table(net$colors), geom = c("violin", "jitter"), ylab = "Number of genes in module")
+```
+
+## Plot dendro and colors
+```{r}
+module_colors <- as.matrix(net$colors)
+WGCNA::plotDendroAndColors(
+    net$dendrograms[[1]],
+    cbind(
+        module_colors,
+        as.matrix(numbers2colors(ct_data$Alpha.cell.RNA$de[rownames(module_colors), ]$log2FoldChange)),
+        as.matrix(numbers2colors(ct_data$Beta.cell.RNA$de[rownames(module_colors), ]$log2FoldChange)),
+        as.matrix(numbers2colors(ct_data$Whole.Islet.RNA$de[rownames(module_colors), ]$log2FoldChange))
+    ),
+    groupLabels = c("Consensus", "Alpha", "Beta", "Islet"),
+    dendroLabels = F
+)
+```
+

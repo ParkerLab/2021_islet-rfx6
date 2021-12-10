@@ -1,0 +1,163 @@
+# Copyright (c) 2021 Vivek Rai
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+root = ENV['ROOT']
+ATAC_DIR = "/path/to/atac-main/fastq/ATAC_3776-CV"
+RNA_DIR = "/path/to/rna-main/fastq/3776-CV/GEX_3776-CV"
+
+if root.nil?
+  puts 'ROOT environment variable is not set'
+  exit 1
+end
+
+require 'csv'
+
+work = "#{root}/work"
+data = "#{root}/data"
+bin = "#{root}/bin"
+
+snATAC_sif = "/path/to/ATAC/singularity/container/snATAC.sif"
+snRNA_sif = "/path/to/RNA/singularity/container/snRNA.sif"
+
+def results(root, tag)
+  "#{root}/work/#{tag}"
+end
+
+def control(root, tag)
+  "#{root}/control/#{tag}"
+end
+
+namespace :data do
+
+  desc "Link FASTQ files"
+  task :link_fastq do
+    atac_dir = "#{data}/fastq/atac"
+    rna_dir = "#{data}/fastq/rna"
+    mkdir_p(atac_dir)
+    mkdir_p(rna_dir)
+
+    puts "python #{bin}/fetch-fastq.py --fastq-dir #{ATAC_DIR}/fastqs_3776-CV --out-dir #{atac_dir}"
+
+    rna_demuxstats = CSV.parse(File.read("#{RNA_DIR}/DemuxStats_3776-CV.csv"), headers: true)
+    rna_sampleids = rna_demuxstats["Sample_ID"]
+
+    rna_sampleids.each do |id|
+      [1, 2].each do |r|
+        puts """ln -sf #{RNA_DIR}/fastqs_3776-CV/#{id}/*_R#{r}_001.fastq.gz #{rna_dir}/#{id}_R#{r}.fastq.gz"""
+        puts """ln -sf #{RNA_DIR}/fastqs_3776-CV/#{id}/*_R#{r}_001.fastq.gz #{rna_dir}/#{id.gsub('Sample_', '')}_R#{r}.fastq.gz"""
+      end
+    end
+  end
+
+  # desc "Build indexes"
+  # multitask :build_indexes => [:star_index, :bwa_index]
+
+  # task :star_index do
+  #   mkdir_p("#{data}/reference/star")
+
+  #   puts "singularity exec #{snRNA_sif} \
+  #     STAR --runMode genomeGenerate --runThreadN 16 --genomeDir #{data}/reference/star \
+  #       --genomeFastaFiles #{data}/reference/hg19-mCherry-mKate2.fa \
+  #       --sjdbGTFfile #{data}/reference/hg19-mCherry-mKate2.gtf
+  #   "
+  # end
+
+  # task :bwa_index do
+  #   mkdir_p("#{data}/reference/bwa")
+  #   ln_sf("#{data}/reference/hg19-mCherry-mKate2.fa", "#{data}/reference/bwa/hg19-mCherry-mKate2.fa")
+  #   puts "singularity exec #{snATAC_sif} bwa index #{data}/reference/bwa/hg19-mCherry-mKate2.fa"
+  # end
+end
+
+namespace :atac do
+  dir = control(root, 'atacseq')
+  work_dir = results(root, 'atacseq')
+
+  task :setup do
+    mkdir_p(dir)
+    sh "python #{dir}/make_config.py #{root} > #{dir}/config.yaml"
+  end
+
+  desc "Align/map ATAC data"
+  task :map do
+    mkdir_p(work_dir)
+
+    sh "cd #{dir} && nextflow run -resume -with-trace -params-file config.yaml \
+      --low_read_count_threshold 1000 -with-report -qs 300 --results #{work_dir} \
+      -with-singularity #{snATAC_sif} \
+      main.nf &"
+  end
+end
+
+namespace :genotype do
+  task :fix_vcf do
+    puts <<~CMD
+      echo $PWD
+      cd data/imputation;
+      vcf-concat filtered/*.vcf.gz | awk '{
+        if($0 !~ /^#/)
+            print "chr"$0;
+        else if(match($0,/(##contig=<ID=)(.*)/,m))
+            print m[1]"chr"m[2];
+        else print $0
+      }' > all-chr.recode.vcf
+
+      echo $PWD
+      picard -m 16G UpdateVcfSequenceDictionary INPUT=all-chr.recode.vcf OUTPUT=all-chr.recode.fixed.vcf SEQUENCE_DICTIONARY=/lab/work/vivekrai/2021-06_pilot-rfx6/data/reference/hg19-mCherry-mKate2.dict
+      picard -m 16G SortVcf INPUT=all-chr.recode.fixed.vcf OUTPUT=all-chr.recode.sorted.vcf
+    CMD
+  end
+end
+
+namespace :rna do
+  dir = control(root, 'rnaseq')
+  work_dir = results(root, 'rnaseq')
+
+  task :setup do
+    mkdir_p(dir)
+
+    sh "python #{dir}/make_config.py #{root} > #{dir}/config.yaml"
+  end
+
+  desc "Align/map RNA data"
+  task :map do
+    mkdir_p(work_dir)
+
+    sh "cd #{dir} && nextflow run -resume -with-trace -params-file config.yaml -with-singularity \
+      #{snRNA_sif} -with-report -qs 300 --results #{work_dir} main.nf &"
+  end
+end
+
+namespace :demuxlet do
+  desc "Run demuxlet using ATAC modality"
+  task :atac do
+    dir = control(root, "demuxlet_atac")
+    work_dir = results(root, "demuxlet_atac")
+
+    mkdir_p(work_dir)
+
+    sh "cd #{dir} && nextflow run -resume -params-file config.yaml --results #{work_dir} main.nf &"
+  end
+
+  desc "Run demuxlet using RNA modality"
+  task :rna do
+    dir = control(root, "demuxlet_rna")
+    work_dir = results(root, "demuxlet_rna")
+
+    mkdir_p(work_dir)
+
+    sh "cd #{dir} && nextflow run -resume -params-file config.yaml --results #{work_dir} main.nf &"
+  end
+end
+
+namespace :qc do
+  desc "Export ATAC/RNA counts to HDF5"
+  task :export_to_hdf do
+    tag = "nuclei-qc"
+    work_dir = results(root, tag)
+
+    sh "cd #{control(root, tag)} && nextflow run -resume --results #{work_dir} counts.nf &"
+  end
+end

@@ -1,0 +1,38 @@
+email: "vivekrai@umich.edu"
+
+BASE: "/home/vivekrai/analyses/2020-01_vanderbilt_rna/control/module-peaks_garfield"
+
+GARFIELD:
+  DATA: "/home/vivekrai/analyses/2020-01_vanderbilt_rna/data/garfield"
+  SCRIPTS: "/home/vivekrai/analyses/2020-01_vanderbilt_rna/src/garfield-v2"
+
+PARAMETERS:
+  traits:
+    - "DIAMANTE.T2D_European"
+    - "DIAMANTE.T2Dbmiadj_European"
+    - "MAGIC-new.FInsadjBMI"
+    - "MAGIC-new.FGluadjBMI"
+    - "MAGIC-new.HbA1c"
+    - "T1D"
+    - "COVID19"
+    # - "CKD"
+    # - "Alzheimers"
+    # - "CAD"
+    # - "TSH"
+    #- "GIANT.Height"
+    - "proinsulin"
+
+  # Exclude annots from pruning and clumping? Provide a comma separated string of index numbers
+  exclude_annots: ""
+
+  # Subset to following annotations; use all if == 0
+  subset_annots: 0
+
+  # P-val thresholds
+  pthresh: "1e-05,1e-08,5e-08"
+
+  # Bins
+  binning: "m5,n5,t5"
+
+  # Single annot level enrichment (0) or conditional analysis (1)
+  condition: 0

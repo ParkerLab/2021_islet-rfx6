@@ -1,0 +1,11 @@
+task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
+2	b3/3e1bc9	12991549	ataqv (1)	CACHED	0	2021-06-23 20:15:50.084	4h 36m 15s	4h 36m 14s	99.2%	49.8 GB	49.8 GB	72.7 GB	1 GB
+5	bc/a0b45a	12991580	get_ataqv_metrics (1)	COMPLETED	0	2021-06-24 01:34:40.073	9m 59s	9m 56s	97.2%	53.7 GB	53.8 GB	867.4 MB	1.4 KB
+1	a7/6d3a5c	12991578	ataqv_custom_ref (1)	COMPLETED	0	2021-06-24 01:34:40.017	4h 21m 25s	4h 21m 20s	99.0%	49.8 GB	49.9 GB	73.2 GB	1 GB
+6	e2/9d7e9a	12991582	get_ataqv_metrics_custom_ref (1)	COMPLETED	0	2021-06-24 05:56:07.938	11m 7s	10m 40s	97.8%	53.8 GB	53.8 GB	869 MB	1.4 KB
+4	42/743e81	12991577	ataqv_custom_ref (2)	FAILED	143	2021-06-24 01:34:39.954	4h 36m 35s	4h 36m 30s	-	-	-	-	-
+3	a0/519e52	12991579	ataqv (2)	FAILED	143	2021-06-24 01:34:40.045	4h 43m 5s	4h 43m	-	-	-	-	-
+7	bc/1254bc	12991583	ataqv_custom_ref (2)	COMPLETED	0	2021-06-24 06:11:16.677	4h 59m 29s	4h 59m 21s	99.7%	50 GB	50.1 GB	78.3 GB	1.1 GB
+8	88/1e9ed8	12991584	ataqv (2)	COMPLETED	0	2021-06-24 06:17:44.751	4h 53m 31s	4h 53m 26s	99.8%	50 GB	50.1 GB	77.8 GB	1.1 GB
+9	53/1ba16c	12991623	get_ataqv_metrics_custom_ref (2)	COMPLETED	0	2021-06-24 11:10:45.952	40m 46s	11m 8s	97.5%	53.9 GB	54 GB	889.1 MB	1.4 KB
+10	24/e750c4	12991624	get_ataqv_metrics (2)	COMPLETED	0	2021-06-24 11:11:15.793	46m 42s	11m 45s	92.5%	53.8 GB	53.9 GB	887.3 MB	1.4 KB

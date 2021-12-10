@@ -1,0 +1,7 @@
+old/
+.snakemake
+.nextflow
+.drmr
+**/logs
+**/.nextflow*
+rnaseq/src/wgcna_go-term_shiny

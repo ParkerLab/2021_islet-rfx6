@@ -1,0 +1,107 @@
+---
+title: "Comparing Celltype Modules (Using Individual Networks)"
+author: "Vivek.Rai"
+date: "3/30/2021"
+output: html_document
+params:
+  count_path: NULL 
+  outdir: NULL
+---
+
+```{r setup, include=FALSE}
+options(stringsAsFactors = F, width = 120)
+
+knitr::opts_chunk$set(
+  comment = "",
+  dev = c('png', 'cairo_pdf'),
+  warning = FALSE, message = FALSE, tidy = FALSE,
+  size = "small",
+  cache = TRUE, cache.lazy = FALSE,
+  fig.width = 8, fig.height = 6, fig.keep = 'all'
+)
+seed <- 2020
+
+suppressPackageStartupMessages({
+  library(knitr)
+  library(tidyverse)
+  library(patchwork)
+  library(glue)
+  library(WGCNA)
+})
+
+theme_set(theme_custom())
+
+root.dir <- "/home/vivekrai/analyses/2020-01_vanderbilt_rna"
+source(glue("{root.dir}/scripts/0_utils.R"))
+```
+
+```{r global_vars}
+stopifnot(!is.null(params$outdir))
+stopifnot(!is.null(params$count_path))
+
+FDR <- params$fdr
+min_reads_per_sample <- 10
+min_fraction_of_sample <- .25
+network_type <- "signed hybrid"
+cor_func <- "bicor"
+
+dir.create(params$outdir, recursive = T, showWarnings = F)
+
+print(params) # inspect all parameters
+```
+
+# Part 1: Setup
+
+## Read DE and WGCNA data 
+```{r read_gene_exp}
+celltypes <- c(
+  "Alpha.cell.RNA",
+  "Beta.cell.RNA",
+  "Whole.Islet.RNA"
+)
+
+celltypes_k <- c(4, 6, 4)
+names(celltypes_k) <- celltypes
+
+ct_data <- list()
+
+for (i in celltypes) {
+  print(glue("Reading {i}.."))
+  ct_data[[i]] <- list(
+    de = readRDS(glue(
+      "{root.dir}/work/dge-analysis/2021-02-05_normalized-data-share/{i}-{celltypes_k[i]}.rds"
+    ))$de$res,
+    wgcna = readRDS(glue(
+      glue("{root.dir}/work/wgcna/2021-03-27/{i}/power-80-limma-TRUE/module-assignment.rds")
+    )),
+    data = readRDS(glue(
+      glue("{root.dir}/work/wgcna/2021-03-27/{i}/power-80-limma-TRUE/celltype-norm-counts.rds")
+    ))
+  )
+}
+```
+
+## Read metadata / covariate 
+```{r metadata}
+metadata <- readRDS(glue("{root.dir}/work/2020-03-25_post-qc/adults-only_sample-info.rds")) %>% 
+  dplyr::rename(Batch = Sequencing.Batch) %>%
+  dplyr::select(-starts_with("Time.on"), -Blood.Type, -SAM.ID, -Cause.of.Death,
+                -Age.Units, -contains("profile"), -sry_exp, -xist_exp) %>%
+  mutate_if(is.character, ~as.factor(.x)) %>%
+  mutate(Disease.Status = ifelse(grepl("Normal", Disease.Status), "Normal", "Type 2 Diabetes"))
+
+head(metadata)
+```
+
+# Part 2: Comparing modules
+
+```{r}
+preserved_mod <- WGCNA::modulePreservation(
+  ct_data,
+  lapply(ct_data, function(x) x$wgcna$module),
+  networkType = network_type,
+  corFnc = cor_func,
+  randomSeed = seed
+)
+```
+
