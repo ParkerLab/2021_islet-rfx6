@@ -63,7 +63,8 @@ running any code.
 
 ## Data Access
 
-The raw data for this manuscript can be accessed at EGA using RRID:SCR\_004944.
+Raw data submission to European Genome-Phenome Archive (EGA) is _in progress_
+(RRID:SCR\_004944).
 
 ## Contact
 
